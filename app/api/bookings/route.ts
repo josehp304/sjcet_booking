@@ -19,7 +19,7 @@ export async function GET(request: Request) {
       FROM bookings b
       JOIN facilities f ON b.facility_id = f.id
       JOIN users u ON b.user_id = u.id
-      WHERE b.status = 'CONFIRMED'
+      WHERE b.status IN ('CONFIRMED', 'APPROVAL_PENDING')
     `;
     const values: any[] = [];
 
@@ -63,19 +63,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Purpose is required' }, { status: 400 });
     }
 
-    // Check for conflicts
+    // Check for conflicts (block both confirmed and pending-approval slots)
     const conflictCheck = await pool.query(
-      'SELECT id FROM bookings WHERE facility_id = $1 AND booking_date = $2 AND session = $3 AND status = $4',
-      [facilityId, date, bookingSession, 'CONFIRMED']
+      "SELECT id FROM bookings WHERE facility_id = $1 AND booking_date = $2 AND session = $3 AND status IN ('CONFIRMED', 'APPROVAL_PENDING')",
+      [facilityId, date, bookingSession]
     );
 
     if (conflictCheck.rows.length > 0) {
       return NextResponse.json({ error: 'Slot already booked' }, { status: 409 });
     }
 
+    // HOD bookings require admin approval; ADMIN bookings are confirmed immediately
+    const bookingStatus = session.user.role === 'HOD' ? 'APPROVAL_PENDING' : 'CONFIRMED';
+
     const result = await pool.query(
-      'INSERT INTO bookings (facility_id, user_id, booking_date, session, purpose) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [facilityId, session.user.id, date, bookingSession, purpose]
+      'INSERT INTO bookings (facility_id, user_id, booking_date, session, purpose, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [facilityId, session.user.id, date, bookingSession, purpose, bookingStatus]
     );
 
     return NextResponse.json(result.rows[0], { status: 201 });

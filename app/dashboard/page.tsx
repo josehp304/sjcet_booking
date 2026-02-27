@@ -116,6 +116,7 @@ export default function DashboardPage() {
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Session</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Dept</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Purpose</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-100">
@@ -140,6 +141,17 @@ export default function DashboardPage() {
                       </td>
                       <td className="px-5 py-3 text-xs text-gray-500">{booking.department}</td>
                       <td className="px-5 py-3 text-xs text-gray-500 max-w-[150px] truncate" title={booking.purpose || ""}>{booking.purpose || "-"}</td>
+                      <td className="px-5 py-3">
+                        <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          booking.status === "CONFIRMED"
+                            ? "bg-green-100 text-green-700"
+                            : booking.status === "APPROVAL_PENDING"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-red-100 text-red-600"
+                        }`}>
+                          {booking.status === "APPROVAL_PENDING" ? "⏳ Pending" : booking.status}
+                        </span>
+                      </td>
                     </tr>
                   ))
                 )}

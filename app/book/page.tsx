@@ -16,6 +16,7 @@ type Facility = {
 type Booking = {
   facility_id: number;
   session: string;
+  status: string;
 };
 
 export default function BookPage() {
@@ -69,6 +70,11 @@ export default function BookPage() {
     fetchBookingsForDate();
   }, [selectedDate]);
 
+  const getSlotBooking = (session: string) =>
+    existingBookings.find(
+      (b) => b.facility_id === parseInt(selectedFacility) && b.session === session
+    );
+
   const isSlotTaken = (session: string) => {
     return existingBookings.some(
       (b) => b.facility_id === parseInt(selectedFacility) && b.session === session
@@ -109,20 +115,20 @@ export default function BookPage() {
         )
       );
 
-      const failed = await Promise.all(
-        results.map(async (res) => {
-          if (!res.ok) return (await res.json()).error || "Failed to book facility";
-          return null;
-        })
-      );
+      const allResults = await Promise.all(results.map(r => r.json()));
+      const errors = allResults
+        .filter(data => data.error)
+        .map(data => data.error === 'Slot already booked' ? 'One or more slots are already booked.' : data.error);
 
-      const errors = failed.filter(Boolean);
       if (errors.length === 0) {
         const label = selectedSessions.length === 2 ? "Both sessions" : selectedSessions[0] === "FORENOON" ? "Forenoon session" : "Afternoon session";
-        setSuccess(`🎉 ${label} booked successfully!`);
-        setTimeout(() => router.push("/dashboard"), 2000);
+        const isPending = allResults.some(data => data.status === 'APPROVAL_PENDING');
+        setSuccess(isPending
+          ? `📋 ${label} submitted for approval. You\'ll be notified once the admin approves it.`
+          : `🎉 ${label} booked successfully!`);
+        setTimeout(() => router.push("/dashboard"), 2500);
       } else {
-        setError(errors.map(e => e === "Slot already booked" ? "One or more slots are already booked." : e).join(" "));
+        setError(errors.join(" "));
       }
     } catch (err) {
       setError("An error occurred. Please try again.");
@@ -222,12 +228,15 @@ export default function BookPage() {
                     type="button"
                     disabled={taken}
                     onClick={() => !taken && toggleSession(session)}
-                    className={`relative flex flex-col items-start p-4 rounded-xl border-2 transition-all ${taken
-                        ? "border-red-200 bg-red-50 cursor-not-allowed opacity-60"
+                    className={`relative flex flex-col items-start p-4 rounded-xl border-2 transition-all ${
+                      taken
+                        ? getSlotBooking(session)?.status === 'APPROVAL_PENDING'
+                          ? "border-amber-200 bg-amber-50 cursor-not-allowed opacity-70"
+                          : "border-red-200 bg-red-50 cursor-not-allowed opacity-60"
                         : selected
                           ? "border-[#E54B3F] bg-red-50"
                           : "border-gray-200 hover:border-gray-300 bg-white cursor-pointer"
-                      }`}
+                    }`}
                   >
                     <span className="text-xl mb-1">{session === "FORENOON" ? "🌅" : "🌇"}</span>
                     <span className="text-sm font-semibold text-gray-800">
@@ -237,7 +246,13 @@ export default function BookPage() {
                       {session === "FORENOON" ? "9:00 AM – 1:00 PM" : "2:00 PM – 5:00 PM"}
                     </span>
                     {taken && (
-                      <span className="mt-2 text-xs font-semibold text-red-600">Already Booked</span>
+                      <span className={`mt-2 text-xs font-semibold ${
+                        getSlotBooking(session)?.status === 'APPROVAL_PENDING'
+                          ? 'text-amber-600'
+                          : 'text-red-600'
+                      }`}>
+                        {getSlotBooking(session)?.status === 'APPROVAL_PENDING' ? '⏳ Pending Approval' : 'Already Booked'}
+                      </span>
                     )}
                     {selected && !taken && (
                       <span className="absolute top-2 right-2 w-4 h-4 bg-[#E54B3F] rounded-full flex items-center justify-center">

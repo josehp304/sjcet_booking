@@ -43,6 +43,7 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<Tab>("bookings");
   const [searchTerm, setSearchTerm] = useState("");
   const [cancellingId, setCancellingId] = useState<number | null>(null);
+  const [approvingId, setApprovingId] = useState<number | null>(null);
 
   // New facility form
   const [newFacilityName, setNewFacilityName] = useState("");
@@ -95,6 +96,20 @@ export default function AdminPage() {
       }
     } finally {
       setCancellingId(null);
+    }
+  };
+
+  const handleApproveBooking = async (id: number) => {
+    setApprovingId(id);
+    try {
+      const res = await fetch(`/api/bookings/${id}`, { method: "PATCH" });
+      if (res.ok) {
+        setBookings(prev => prev.map(b => b.id === id ? { ...b, status: "CONFIRMED" } : b));
+      } else {
+        alert("Failed to approve booking");
+      }
+    } finally {
+      setApprovingId(null);
     }
   };
 
@@ -356,29 +371,53 @@ export default function AdminPage() {
                           {booking.purpose || "-"}
                         </td>
                         <td className="px-5 py-3">
-                          <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${booking.status === "CONFIRMED" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
-                            }`}>
-                            {booking.status}
+                          <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            booking.status === "CONFIRMED"
+                              ? "bg-green-100 text-green-700"
+                              : booking.status === "APPROVAL_PENDING"
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-red-100 text-red-600"
+                          }`}>
+                            {booking.status === "APPROVAL_PENDING" ? "⏳ Pending" : booking.status}
                           </span>
                         </td>
                         <td className="px-5 py-3 text-right">
-                          {booking.status === "CONFIRMED" && (
-                            <button
-                              onClick={() => handleCancelBooking(booking.id)}
-                              disabled={cancellingId === booking.id}
-                              className="inline-flex items-center text-red-500 hover:text-red-700 text-sm font-medium hover:underline disabled:opacity-60 disabled:cursor-not-allowed"
-                            >
-                              {cancellingId === booking.id ? (
-                                <>
-                                  <svg className="animate-spin h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                  </svg>
-                                  Cancelling...
-                                </>
-                              ) : "Cancel"}
-                            </button>
-                          )}
+                          <div className="flex items-center justify-end gap-3">
+                            {booking.status === "APPROVAL_PENDING" && (
+                              <button
+                                onClick={() => handleApproveBooking(booking.id)}
+                                disabled={approvingId === booking.id}
+                                className="inline-flex items-center text-green-600 hover:text-green-800 text-sm font-medium hover:underline disabled:opacity-60 disabled:cursor-not-allowed"
+                              >
+                                {approvingId === booking.id ? (
+                                  <>
+                                    <svg className="animate-spin h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                    </svg>
+                                    Approving...
+                                  </>
+                                ) : "✓ Approve"}
+                              </button>
+                            )}
+                            {(booking.status === "CONFIRMED" || booking.status === "APPROVAL_PENDING") && (
+                              <button
+                                onClick={() => handleCancelBooking(booking.id)}
+                                disabled={cancellingId === booking.id}
+                                className="inline-flex items-center text-red-500 hover:text-red-700 text-sm font-medium hover:underline disabled:opacity-60 disabled:cursor-not-allowed"
+                              >
+                                {cancellingId === booking.id ? (
+                                  <>
+                                    <svg className="animate-spin h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                    </svg>
+                                    Cancelling...
+                                  </>
+                                ) : "Cancel"}
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))
