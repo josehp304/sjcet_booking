@@ -73,8 +73,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Slot already booked' }, { status: 409 });
     }
 
-    // HOD bookings require admin approval; ADMIN bookings are confirmed immediately
-    const bookingStatus = session.user.role === 'HOD' ? 'APPROVAL_PENDING' : 'CONFIRMED';
+    // HOD and COORDINATOR bookings require admin approval; ADMIN bookings are confirmed immediately
+    const bookingStatus = ['HOD', 'COORDINATOR'].includes(session.user.role) ? 'APPROVAL_PENDING' : 'CONFIRMED';
 
     const result = await pool.query(
       'INSERT INTO bookings (facility_id, user_id, booking_date, session, purpose, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',

@@ -283,14 +283,19 @@ export default function AdminPage() {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Total Bookings", value: bookings.length, icon: "📋" },
-          { label: "Facilities", value: facilities.length, icon: "🏛️" },
-          { label: "HOD Users", value: users.filter(u => u.role === "HOD").length, icon: "👨‍🏫" },
+          { label: `Bookings This Month`, value: bookings.filter(b => new Date(b.booking_date).getMonth() === new Date().getMonth() && new Date(b.booking_date).getFullYear() === new Date().getFullYear()).length, icon: "📋", tooltip: "Total confirmed and pending bookings made in the current calendar month." },
+          { label: "Facilities", value: facilities.length, icon: "🏗️", tooltip: "Total number of facilities registered and available for booking." },
+          { label: "HOD / Coordinators", value: users.filter(u => u.role === "HOD" || u.role === "COORDINATOR").length, icon: "👨‍🏫", tooltip: "Number of HOD and Coordinator accounts. Their bookings require admin approval before being confirmed." },
         ].map((stat) => (
-          <div key={stat.label} className="bg-white rounded-xl border border-gray-200 p-4 text-center shadow-sm">
+          <div key={stat.label} title={stat.tooltip} className="relative bg-white rounded-xl border border-gray-200 p-4 text-center shadow-sm cursor-default group">
             <div className="text-2xl mb-1">{stat.icon}</div>
             <div className="text-2xl font-bold text-gray-800">{stat.value}</div>
             <div className="text-xs text-gray-500 mt-0.5">{stat.label}</div>
+            {/* Tooltip */}
+            <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 rounded-lg bg-gray-800 text-white text-xs px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-10 shadow-lg text-center">
+              {stat.tooltip}
+              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+            </div>
           </div>
         ))}
       </div>
@@ -584,6 +589,7 @@ export default function AdminPage() {
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Role</label>
                   <select className="block w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#E54B3F] focus:border-[#E54B3F]" value={newUserRole} onChange={e => setNewUserRole(e.target.value)}>
                     <option value="HOD">HOD</option>
+                    <option value="COORDINATOR">COORDINATOR</option>
                     <option value="ADMIN">ADMIN</option>
                   </select>
                 </div>
@@ -627,7 +633,10 @@ export default function AdminPage() {
                         <td className="px-5 py-3 text-sm text-gray-500">{u.email}</td>
                         <td className="px-5 py-3 text-sm text-gray-500">{u.department}</td>
                         <td className="px-5 py-3">
-                          <span className={`px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${u.role === "ADMIN" ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"
+                          <span className={`px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                              u.role === "ADMIN" ? "bg-orange-100 text-orange-700" :
+                              u.role === "COORDINATOR" ? "bg-purple-100 text-purple-700" :
+                              "bg-blue-100 text-blue-700"
                             }`}>
                             {u.role}
                           </span>

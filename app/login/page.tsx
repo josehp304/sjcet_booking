@@ -128,7 +128,7 @@ export default function LoginPage() {
 
             <div className="mt-4 pt-4 border-t border-gray-100">
               <p className="text-xs text-gray-400 text-center font-medium uppercase tracking-wide mb-2">Demo Credentials</p>
-              <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
+              <div className="grid grid-cols-3 gap-2 text-xs text-gray-500">
                 <div className="bg-gray-50 rounded p-2">
                   <p className="font-semibold text-gray-700">Admin</p>
                   <p>admin@sjcet.edu</p>
@@ -138,6 +138,11 @@ export default function LoginPage() {
                   <p className="font-semibold text-gray-700">HOD</p>
                   <p>hodcs@sjcet.edu</p>
                   <p>hod123</p>
+                </div>
+                <div className="bg-gray-50 rounded p-2">
+                  <p className="font-semibold text-gray-700">Coordinator</p>
+                  <p>coordinator@sjcet.edu</p>
+                  <p>coord123</p>
                 </div>
               </div>
             </div>

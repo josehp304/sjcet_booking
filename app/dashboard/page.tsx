@@ -84,15 +84,20 @@ export default function DashboardPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: "Total Facilities", value: facilities.length, icon: "🏛️", color: "bg-blue-50 text-blue-700 border-blue-100" },
-          { label: "Total Bookings", value: bookings.length, icon: "📋", color: "bg-green-50 text-green-700 border-green-100" },
-          { label: "Today's Bookings", value: todayBookings.length, icon: "📅", color: "bg-orange-50 text-orange-700 border-orange-100" },
-          { label: "Available Slots", value: facilities.length * 2 - todayBookings.length, icon: "✅", color: "bg-purple-50 text-purple-700 border-purple-100" },
+          { label: "Total Facilities", value: facilities.length, icon: "🏗️", color: "bg-blue-50 text-blue-700 border-blue-100", tooltip: "Total number of bookable facilities available in the system." },
+          { label: "Bookings This Month", value: bookings.filter(b => new Date(b.booking_date).getMonth() === new Date().getMonth() && new Date(b.booking_date).getFullYear() === new Date().getFullYear()).length, icon: "📋", color: "bg-green-50 text-green-700 border-green-100", tooltip: "Total confirmed and pending bookings made in the current calendar month." },
+          { label: "Today's Bookings", value: todayBookings.length, icon: "📅", color: "bg-orange-50 text-orange-700 border-orange-100", tooltip: "Number of bookings (confirmed or pending) scheduled for today." },
+          { label: "Available Slots", value: facilities.length * 2 - todayBookings.length, icon: "✅", color: "bg-purple-50 text-purple-700 border-purple-100", tooltip: "Remaining bookable sessions today. Each facility has 2 sessions (Forenoon + Afternoon)." },
         ].map((stat) => (
-          <div key={stat.label} className={`rounded-xl border p-4 ${stat.color}`}>
+          <div key={stat.label} title={stat.tooltip} className={`relative rounded-xl border p-4 cursor-default group ${stat.color}`}>
             <div className="text-2xl mb-1">{stat.icon}</div>
             <div className="text-2xl font-bold">{stat.value}</div>
             <div className="text-xs font-medium mt-0.5">{stat.label}</div>
+            {/* Tooltip */}
+            <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-lg bg-gray-800 text-white text-xs px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-10 shadow-lg text-center">
+              {stat.tooltip}
+              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+            </div>
           </div>
         ))}
       </div>
