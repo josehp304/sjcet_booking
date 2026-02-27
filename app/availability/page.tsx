@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { format } from "date-fns";
+import { format, startOfMonth, subMonths, addMonths } from "date-fns";
+import { MonthlyCalendar } from "@/components/monthly-calendar";
 
 type Booking = {
   id: number;
@@ -12,6 +13,7 @@ type Booking = {
   booking_date: string;
   session: string;
   status: string;
+  purpose: string;
 };
 
 type Facility = {
@@ -55,6 +57,34 @@ export default function AvailabilityPage() {
   const [bookingsLoading, setBookingsLoading] = useState(true);
   const [filterFacility, setFilterFacility] = useState("all");
   const [filterDate, setFilterDate] = useState(format(new Date(), "yyyy-MM-dd"));
+
+  const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
+  const [monthlyBookings, setMonthlyBookings] = useState<Booking[]>([]);
+  const [monthlyLoading, setMonthlyLoading] = useState(false);
+
+  useEffect(() => {
+    if (filterFacility === "all") {
+      setMonthlyBookings([]);
+      return;
+    }
+
+    async function fetchMonthlyBookings() {
+      setMonthlyLoading(true);
+      try {
+        const params = new URLSearchParams();
+        params.set("facilityId", filterFacility);
+        params.set("month", format(calendarMonth, "yyyy-MM"));
+
+        const res = await fetch(`/api/bookings?${params.toString()}`);
+        if (res.ok) setMonthlyBookings(await res.json());
+      } catch (error) {
+        console.error("Failed to fetch monthly bookings", error);
+      } finally {
+        setMonthlyLoading(false);
+      }
+    }
+    fetchMonthlyBookings();
+  }, [filterFacility, calendarMonth]);
 
   useEffect(() => {
     async function fetchData() {
@@ -234,9 +264,8 @@ export default function AvailabilityPage() {
                       <p className="text-sm font-semibold text-gray-800">🌅 Forenoon</p>
                       <p className="text-xs text-gray-500 mt-0.5">9:00 AM – 1:00 PM</p>
                     </div>
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                      fnBooking ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
-                    }`}>
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${fnBooking ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+                      }`}>
                       {fnBooking ? "Booked" : "Available"}
                     </span>
                   </div>
@@ -244,6 +273,7 @@ export default function AvailabilityPage() {
                     <div className="mt-3 p-2.5 bg-white rounded-lg border border-red-100">
                       <p className="text-xs font-medium text-gray-700">{fnBooking.user_name}</p>
                       <p className="text-xs text-gray-400">{fnBooking.department}</p>
+                      {fnBooking.purpose && <p className="text-xs text-gray-500 mt-1 italic block truncate" title={fnBooking.purpose}>"{fnBooking.purpose}"</p>}
                     </div>
                   )}
                 </div>
@@ -254,9 +284,8 @@ export default function AvailabilityPage() {
                       <p className="text-sm font-semibold text-gray-800">🌇 Afternoon</p>
                       <p className="text-xs text-gray-500 mt-0.5">2:00 PM – 5:00 PM</p>
                     </div>
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                      anBooking ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
-                    }`}>
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${anBooking ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+                      }`}>
                       {anBooking ? "Booked" : "Available"}
                     </span>
                   </div>
@@ -264,6 +293,7 @@ export default function AvailabilityPage() {
                     <div className="mt-3 p-2.5 bg-white rounded-lg border border-red-100">
                       <p className="text-xs font-medium text-gray-700">{anBooking.user_name}</p>
                       <p className="text-xs text-gray-400">{anBooking.department}</p>
+                      {anBooking.purpose && <p className="text-xs text-gray-500 mt-1 italic block truncate" title={anBooking.purpose}>"{anBooking.purpose}"</p>}
                     </div>
                   )}
                 </div>
@@ -278,6 +308,38 @@ export default function AvailabilityPage() {
           <p className="text-lg font-medium">No facilities found.</p>
         </div>
       )}
+
+      <div className="mt-12 border-t border-gray-200 pt-8">
+        <div className="mb-4">
+          <h2 className="text-xl font-bold text-gray-900">Monthly Calendar Overview</h2>
+          <p className="text-sm text-gray-500">View overall booking status over the entire month.</p>
+        </div>
+
+        {filterFacility === "all" ? (
+          <div className="bg-gray-50 border border-gray-200 border-dashed rounded-xl p-12 text-center flex flex-col items-center justify-center space-y-3">
+            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm border border-gray-200 mb-2">
+              <span className="text-xl">📅</span>
+            </div>
+            <p className="text-gray-600 font-medium text-lg">Select a specific facility.</p>
+            <p className="text-sm text-gray-400 max-w-sm">Please choose a facility from the dropdown filter above to view its detailed monthly availability calendar.</p>
+          </div>
+        ) : (
+          <div className="relative">
+            {monthlyLoading && (
+              <div className="absolute inset-0 bg-white/50 backdrop-blur-[2px] z-20 flex items-center justify-center rounded-xl">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#E54B3F]"></div>
+              </div>
+            )}
+            <MonthlyCalendar
+              facilityName={facilities.find(f => f.id.toString() === filterFacility)?.name || ""}
+              bookings={monthlyBookings}
+              currentMonth={calendarMonth}
+              onPrevMonth={() => setCalendarMonth(prev => subMonths(prev, 1))}
+              onNextMonth={() => setCalendarMonth(prev => addMonths(prev, 1))}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

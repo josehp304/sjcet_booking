@@ -14,6 +14,7 @@ type Booking = {
   session: string;
   status: string;
   created_at: string;
+  purpose: string;
 };
 
 type Facility = {
@@ -49,6 +50,8 @@ export default function AdminPage() {
   const [newFacilityDesc, setNewFacilityDesc] = useState("");
   const [facilityMsg, setFacilityMsg] = useState<{ type: "error" | "success"; msg: string } | null>(null);
   const [addingFacility, setAddingFacility] = useState(false);
+  const [editingFacilityId, setEditingFacilityId] = useState<number | null>(null);
+  const [deletingFacilityId, setDeletingFacilityId] = useState<number | null>(null);
 
   // New user form
   const [newUserName, setNewUserName] = useState("");
@@ -95,13 +98,17 @@ export default function AdminPage() {
     }
   };
 
-  const handleAddFacility = async (e: React.FormEvent) => {
+  const handleSaveFacility = async (e: React.FormEvent) => {
     e.preventDefault();
     setFacilityMsg(null);
     setAddingFacility(true);
     try {
-      const res = await fetch("/api/facilities", {
-        method: "POST",
+      const isEditing = editingFacilityId !== null;
+      const url = isEditing ? `/api/facilities/${editingFacilityId}` : "/api/facilities";
+      const method = isEditing ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: newFacilityName,
@@ -110,26 +117,61 @@ export default function AdminPage() {
         }),
       });
       if (res.ok) {
-        const newFacility = await res.json();
-        setFacilities(prev => [...prev, newFacility]);
-        setFacilityMsg({ type: "success", msg: "Facility added successfully!" });
-        setNewFacilityName("");
-        setNewFacilityCapacity("");
-        setNewFacilityDesc("");
+        const savedFacility = await res.json();
+        if (isEditing) {
+          setFacilities(prev => prev.map(f => f.id === editingFacilityId ? savedFacility : f));
+          setFacilityMsg({ type: "success", msg: "Facility updated successfully!" });
+        } else {
+          setFacilities(prev => [...prev, savedFacility]);
+          setFacilityMsg({ type: "success", msg: "Facility added successfully!" });
+        }
+        resetFacilityForm();
       } else {
         const data = await res.json();
-        setFacilityMsg({ type: "error", msg: data.error || "Failed to add facility" });
+        setFacilityMsg({ type: "error", msg: data.error || `Failed to ${isEditing ? "update" : "add"} facility` });
       }
     } finally {
       setAddingFacility(false);
     }
   };
 
+  const resetFacilityForm = () => {
+    setNewFacilityName("");
+    setNewFacilityCapacity("");
+    setNewFacilityDesc("");
+    setEditingFacilityId(null);
+  };
+
+  const handleEditFacility = (facility: Facility) => {
+    setEditingFacilityId(facility.id);
+    setNewFacilityName(facility.name);
+    setNewFacilityCapacity(facility.capacity ? facility.capacity.toString() : "");
+    setNewFacilityDesc(facility.description || "");
+    setFacilityMsg(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDeleteFacility = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this facility?")) return;
+    setDeletingFacilityId(id);
+    try {
+      const res = await fetch(`/api/facilities/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setFacilities(prev => prev.filter(f => f.id !== id));
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to delete facility");
+      }
+    } finally {
+      setDeletingFacilityId(null);
+    }
+  };
+
   const handleExportCSV = () => {
     const rows = [
-      ["ID", "Facility", "Date", "Session", "Booked By", "Department", "Status"],
+      ["ID", "Facility", "Date", "Session", "Booked By", "Department", "Purpose", "Status"],
       ...bookings.map(b => [
-        b.id, b.facility_name, format(new Date(b.booking_date), "yyyy-MM-dd"), b.session, b.user_name, b.department, b.status
+        b.id, b.facility_name, format(new Date(b.booking_date), "yyyy-MM-dd"), b.session, b.user_name, b.department, `"${(b.purpose || "").replace(/"/g, '""')}"`, b.status
       ])
     ];
     const csv = rows.map(r => r.join(",")).join("\n");
@@ -245,17 +287,15 @@ export default function AdminPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`${
-                activeTab === tab.id
-                  ? "border-[#E54B3F] text-[#E54B3F]"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-1.5`}
+              className={`${activeTab === tab.id
+                ? "border-[#E54B3F] text-[#E54B3F]"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-1.5`}
             >
               <span>{tab.label}</span>
               {tab.count !== undefined && (
-                <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${
-                  activeTab === tab.id ? "bg-red-100 text-[#E54B3F]" : "bg-gray-100 text-gray-500"
-                }`}>
+                <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${activeTab === tab.id ? "bg-red-100 text-[#E54B3F]" : "bg-gray-100 text-gray-500"
+                  }`}>
                   {tab.count}
                 </span>
               )}
@@ -285,6 +325,7 @@ export default function AdminPage() {
                     <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
                     <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Session</th>
                     <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Booked By</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Purpose</th>
                     <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                     <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
@@ -302,9 +343,8 @@ export default function AdminPage() {
                         <td className="px-5 py-3 text-sm font-medium text-gray-800">{booking.facility_name}</td>
                         <td className="px-5 py-3 text-sm text-gray-500">{format(new Date(booking.booking_date), "MMM dd, yyyy")}</td>
                         <td className="px-5 py-3">
-                          <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            booking.session === "FORENOON" ? "bg-sky-100 text-sky-700" : "bg-violet-100 text-violet-700"
-                          }`}>
+                          <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${booking.session === "FORENOON" ? "bg-sky-100 text-sky-700" : "bg-violet-100 text-violet-700"
+                            }`}>
                             {booking.session === "FORENOON" ? "🌅 Forenoon" : "🌇 Afternoon"}
                           </span>
                         </td>
@@ -312,10 +352,12 @@ export default function AdminPage() {
                           <div>{booking.user_name}</div>
                           <div className="text-xs text-gray-400">{booking.department}</div>
                         </td>
+                        <td className="px-5 py-3 text-xs text-gray-500 max-w-[150px] truncate" title={booking.purpose || ""}>
+                          {booking.purpose || "-"}
+                        </td>
                         <td className="px-5 py-3">
-                          <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            booking.status === "CONFIRMED" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
-                          }`}>
+                          <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${booking.status === "CONFIRMED" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
+                            }`}>
                             {booking.status}
                           </span>
                         </td>
@@ -353,8 +395,10 @@ export default function AdminPage() {
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
           <div className="md:col-span-2">
             <div className="bg-white shadow-sm rounded-xl border border-gray-200 p-5">
-              <h3 className="text-base font-semibold text-gray-900 mb-4">Add New Facility</h3>
-              <form onSubmit={handleAddFacility} className="space-y-4">
+              <h3 className="text-base font-semibold text-gray-900 mb-4">
+                {editingFacilityId ? "Edit Facility" : "Add New Facility"}
+              </h3>
+              <form onSubmit={handleSaveFacility} className="space-y-4">
                 {facilityMsg && (
                   <div className={`p-3 rounded-lg text-sm ${facilityMsg.type === "success" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
                     {facilityMsg.msg}
@@ -392,21 +436,35 @@ export default function AdminPage() {
                     placeholder="Brief description..."
                   />
                 </div>
-                <button
-                  type="submit"
-                  disabled={addingFacility}
-                  className={`w-full flex justify-center items-center py-2 px-4 bg-[#E54B3F] text-white text-sm font-semibold rounded-lg hover:bg-[#d43d32] transition-colors ${addingFacility ? "opacity-70 cursor-not-allowed" : ""}`}
-                >
-                  {addingFacility ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      Adding...
-                    </>
-                  ) : "Add Facility"}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={addingFacility}
+                    className={`flex-1 flex justify-center items-center py-2 px-4 bg-[#E54B3F] text-white text-sm font-semibold rounded-lg hover:bg-[#d43d32] transition-colors ${addingFacility ? "opacity-70 cursor-not-allowed" : ""}`}
+                  >
+                    {addingFacility ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        {editingFacilityId ? "Updating..." : "Adding..."}
+                      </>
+                    ) : (editingFacilityId ? "Update Facility" : "Add Facility")}
+                  </button>
+                  {editingFacilityId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetFacilityForm();
+                        setFacilityMsg(null);
+                      }}
+                      className="py-2 px-4 bg-gray-200 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-300 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </form>
             </div>
           </div>
@@ -431,6 +489,21 @@ export default function AdminPage() {
                           👥 {facility.capacity}
                         </span>
                       )}
+                    </div>
+                    <div className="mt-3 flex gap-3">
+                      <button
+                        onClick={() => handleEditFacility(facility)}
+                        className="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteFacility(facility.id)}
+                        disabled={deletingFacilityId === facility.id}
+                        className="text-sm font-medium text-red-500 hover:text-red-700 transition-colors disabled:opacity-50"
+                      >
+                        {deletingFacilityId === facility.id ? "Deleting..." : "Delete"}
+                      </button>
                     </div>
                   </li>
                 ))}
@@ -515,9 +588,8 @@ export default function AdminPage() {
                         <td className="px-5 py-3 text-sm text-gray-500">{u.email}</td>
                         <td className="px-5 py-3 text-sm text-gray-500">{u.department}</td>
                         <td className="px-5 py-3">
-                          <span className={`px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            u.role === "ADMIN" ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"
-                          }`}>
+                          <span className={`px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${u.role === "ADMIN" ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"
+                            }`}>
                             {u.role}
                           </span>
                         </td>

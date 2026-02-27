@@ -31,6 +31,7 @@ export default function BookPage() {
   const [selectedFacility, setSelectedFacility] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedSessions, setSelectedSessions] = useState<string[]>(["FORENOON"]);
+  const [purpose, setPurpose] = useState("");
 
   useEffect(() => {
     async function fetchFacilities() {
@@ -102,6 +103,7 @@ export default function BookPage() {
               facilityId: parseInt(selectedFacility),
               date: selectedDate,
               session,
+              purpose,
             }),
           })
         )
@@ -220,13 +222,12 @@ export default function BookPage() {
                     type="button"
                     disabled={taken}
                     onClick={() => !taken && toggleSession(session)}
-                    className={`relative flex flex-col items-start p-4 rounded-xl border-2 transition-all ${
-                      taken
+                    className={`relative flex flex-col items-start p-4 rounded-xl border-2 transition-all ${taken
                         ? "border-red-200 bg-red-50 cursor-not-allowed opacity-60"
                         : selected
-                        ? "border-[#E54B3F] bg-red-50"
-                        : "border-gray-200 hover:border-gray-300 bg-white cursor-pointer"
-                    }`}
+                          ? "border-[#E54B3F] bg-red-50"
+                          : "border-gray-200 hover:border-gray-300 bg-white cursor-pointer"
+                      }`}
                   >
                     <span className="text-xl mb-1">{session === "FORENOON" ? "🌅" : "🌇"}</span>
                     <span className="text-sm font-semibold text-gray-800">
@@ -251,6 +252,21 @@ export default function BookPage() {
             </div>
           </div>
 
+          {/* Purpose field */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Purpose
+            </label>
+            <textarea
+              required
+              rows={3}
+              className="block w-full border border-gray-300 rounded-lg py-2.5 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#E54B3F] focus:border-[#E54B3F] resize-none"
+              placeholder="Enter the purpose of this booking"
+              value={purpose}
+              onChange={(e) => setPurpose(e.target.value)}
+            />
+          </div>
+
           {/* Booking summary */}
           {selectedFacility && selectedDate && (
             <div className="bg-gray-50 rounded-lg p-4 text-sm">
@@ -272,10 +288,10 @@ export default function BookPage() {
                     {selectedSessions.length === 0
                       ? "None selected"
                       : selectedSessions.length === 2
-                      ? "Full Day (Forenoon + Afternoon)"
-                      : selectedSessions[0] === "FORENOON"
-                      ? "Forenoon (9:00 AM – 1:00 PM)"
-                      : "Afternoon (2:00 PM – 5:00 PM)"}
+                        ? "Full Day (Forenoon + Afternoon)"
+                        : selectedSessions[0] === "FORENOON"
+                          ? "Forenoon (9:00 AM – 1:00 PM)"
+                          : "Afternoon (2:00 PM – 5:00 PM)"}
                   </dd>
                 </div>
                 <div className="flex justify-between">
@@ -293,9 +309,8 @@ export default function BookPage() {
             <button
               type="submit"
               disabled={submitting || selectedSessions.length === 0 || selectedSessions.every(s => isSlotTaken(s))}
-              className={`flex-1 flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg text-sm font-semibold text-white bg-[#E54B3F] hover:bg-[#d43d32] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#E54B3F] transition-colors ${
-                (submitting || selectedSessions.length === 0 || selectedSessions.every(s => isSlotTaken(s))) ? "opacity-60 cursor-not-allowed" : ""
-              }`}
+              className={`flex-1 flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg text-sm font-semibold text-white bg-[#E54B3F] hover:bg-[#d43d32] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#E54B3F] transition-colors ${(submitting || selectedSessions.length === 0 || selectedSessions.every(s => isSlotTaken(s))) ? "opacity-60 cursor-not-allowed" : ""
+                }`}
             >
               {submitting ? (
                 <>

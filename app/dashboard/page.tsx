@@ -13,6 +13,7 @@ type Booking = {
   booking_date: string;
   session: string;
   status: string;
+  purpose: string;
 };
 
 type Facility = {
@@ -114,6 +115,7 @@ export default function DashboardPage() {
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Session</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Dept</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Purpose</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-100">
@@ -131,13 +133,13 @@ export default function DashboardPage() {
                         {format(new Date(booking.booking_date), "MMM dd, yyyy")}
                       </td>
                       <td className="px-5 py-3">
-                        <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          booking.session === "FORENOON" ? "bg-sky-100 text-sky-700" : "bg-violet-100 text-violet-700"
-                        }`}>
+                        <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${booking.session === "FORENOON" ? "bg-sky-100 text-sky-700" : "bg-violet-100 text-violet-700"
+                          }`}>
                           {booking.session === "FORENOON" ? "🌅 FN" : "🌇 AN"}
                         </span>
                       </td>
                       <td className="px-5 py-3 text-xs text-gray-500">{booking.department}</td>
+                      <td className="px-5 py-3 text-xs text-gray-500 max-w-[150px] truncate" title={booking.purpose || ""}>{booking.purpose || "-"}</td>
                     </tr>
                   ))
                 )}

@@ -12,6 +12,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const facilityId = searchParams.get('facilityId');
     const date = searchParams.get('date');
+    const month = searchParams.get('month'); // Expects YYYY-MM
 
     let query = `
       SELECT b.*, f.name as facility_name, u.name as user_name, u.department
@@ -30,6 +31,13 @@ export async function GET(request: Request) {
     if (date) {
       values.push(date);
       query += ` AND b.booking_date = $${values.length}`;
+    } else if (month) {
+      const startOfMonth = `${month}-01`;
+      const [year, mon] = month.split('-').map(Number);
+      const lastDay = new Date(year, mon, 0).getDate(); // day 0 of next month = last day of current month
+      const endOfMonth = `${month}-${String(lastDay).padStart(2, '0')}`;
+      values.push(startOfMonth, endOfMonth);
+      query += ` AND b.booking_date >= $${values.length - 1} AND b.booking_date <= $${values.length}`;
     }
 
     query += ' ORDER BY b.booking_date DESC, b.session ASC';
@@ -49,7 +57,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { facilityId, date, session: bookingSession } = await request.json();
+    const { facilityId, date, session: bookingSession, purpose } = await request.json();
+
+    if (!purpose || purpose.trim() === '') {
+      return NextResponse.json({ error: 'Purpose is required' }, { status: 400 });
+    }
 
     // Check for conflicts
     const conflictCheck = await pool.query(
@@ -62,8 +74,8 @@ export async function POST(request: Request) {
     }
 
     const result = await pool.query(
-      'INSERT INTO bookings (facility_id, user_id, booking_date, session) VALUES ($1, $2, $3, $4) RETURNING *',
-      [facilityId, session.user.id, date, bookingSession]
+      'INSERT INTO bookings (facility_id, user_id, booking_date, session, purpose) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [facilityId, session.user.id, date, bookingSession, purpose]
     );
 
     return NextResponse.json(result.rows[0], { status: 201 });
