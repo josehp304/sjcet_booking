@@ -10,11 +10,11 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         }
 
         const { id } = await params;
-        const { name, capacity, description } = await request.json();
+        const { name, capacity, description, features } = await request.json();
 
         const result = await pool.query(
-            'UPDATE facilities SET name = $1, capacity = $2, description = $3 WHERE id = $4 RETURNING *',
-            [name, capacity, description, id]
+            'UPDATE facilities SET name = $1, capacity = $2, description = $3, features = $4 WHERE id = $5 RETURNING *',
+            [name, capacity, description, features ?? [], id]
         );
 
         if (result.rows.length === 0) {

@@ -24,11 +24,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { name, capacity, description } = await request.json();
+    const { name, capacity, description, features } = await request.json();
 
     const result = await pool.query(
-      'INSERT INTO facilities (name, capacity, description) VALUES ($1, $2, $3) RETURNING *',
-      [name, capacity, description]
+      'INSERT INTO facilities (name, capacity, description, features) VALUES ($1, $2, $3, $4) RETURNING *',
+      [name, capacity, description, features ?? []]
     );
 
     return NextResponse.json(result.rows[0], { status: 201 });

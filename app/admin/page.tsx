@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { format } from "date-fns";
+import { formatSession, getSessionColor } from "@/lib/utils";
 
 type Booking = {
   id: number;
@@ -22,6 +23,7 @@ type Facility = {
   name: string;
   capacity: number;
   description: string;
+  features: string[];
 };
 
 type User = {
@@ -49,10 +51,28 @@ export default function AdminPage() {
   const [newFacilityName, setNewFacilityName] = useState("");
   const [newFacilityCapacity, setNewFacilityCapacity] = useState("");
   const [newFacilityDesc, setNewFacilityDesc] = useState("");
+  const [newFacilityFeatures, setNewFacilityFeatures] = useState<string[]>([]);
   const [facilityMsg, setFacilityMsg] = useState<{ type: "error" | "success"; msg: string } | null>(null);
   const [addingFacility, setAddingFacility] = useState(false);
   const [editingFacilityId, setEditingFacilityId] = useState<number | null>(null);
   const [deletingFacilityId, setDeletingFacilityId] = useState<number | null>(null);
+
+  const FACILITY_FEATURE_OPTIONS = [
+    { label: "Mic", emoji: "🎤" },
+    { label: "Speakers", emoji: "🔊" },
+    { label: "Podium", emoji: "🎙️" },
+    { label: "Projector", emoji: "📽️" },
+    { label: "AC", emoji: "❄️" },
+    { label: "WiFi", emoji: "📶" },
+    { label: "Whiteboard", emoji: "📋" },
+    { label: "TV Screen", emoji: "📺" },
+  ];
+
+  const toggleFeature = (feature: string) => {
+    setNewFacilityFeatures(prev =>
+      prev.includes(feature) ? prev.filter(f => f !== feature) : [...prev, feature]
+    );
+  };
 
   // New user form
   const [newUserName, setNewUserName] = useState("");
@@ -129,6 +149,7 @@ export default function AdminPage() {
           name: newFacilityName,
           capacity: newFacilityCapacity ? parseInt(newFacilityCapacity) : null,
           description: newFacilityDesc,
+          features: newFacilityFeatures,
         }),
       });
       if (res.ok) {
@@ -154,6 +175,7 @@ export default function AdminPage() {
     setNewFacilityName("");
     setNewFacilityCapacity("");
     setNewFacilityDesc("");
+    setNewFacilityFeatures([]);
     setEditingFacilityId(null);
   };
 
@@ -162,6 +184,7 @@ export default function AdminPage() {
     setNewFacilityName(facility.name);
     setNewFacilityCapacity(facility.capacity ? facility.capacity.toString() : "");
     setNewFacilityDesc(facility.description || "");
+    setNewFacilityFeatures(facility.features || []);
     setFacilityMsg(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -363,9 +386,8 @@ export default function AdminPage() {
                         <td className="px-5 py-3 text-sm font-medium text-gray-800">{booking.facility_name}</td>
                         <td className="px-5 py-3 text-sm text-gray-500">{format(new Date(booking.booking_date), "MMM dd, yyyy")}</td>
                         <td className="px-5 py-3">
-                          <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${booking.session === "FORENOON" ? "bg-sky-100 text-sky-700" : "bg-violet-100 text-violet-700"
-                            }`}>
-                            {booking.session === "FORENOON" ? "🌅 Forenoon" : "🌇 Afternoon"}
+                          <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${getSessionColor(booking.session)}`}>
+                            {formatSession(booking.session).replace("🕒 ", "")}
                           </span>
                         </td>
                         <td className="px-5 py-3 text-sm text-gray-500">
@@ -480,6 +502,30 @@ export default function AdminPage() {
                     placeholder="Brief description..."
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Features</label>
+                  <p className="text-xs text-gray-400 mb-2">Select available amenities for this facility.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {FACILITY_FEATURE_OPTIONS.map(({ label, emoji }) => {
+                      const selected = newFacilityFeatures.includes(label);
+                      return (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() => toggleFeature(label)}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                            selected
+                              ? "bg-[#E54B3F] text-white border-[#E54B3F] shadow-sm"
+                              : "bg-white text-gray-600 border-gray-300 hover:border-[#E54B3F] hover:text-[#E54B3F]"
+                          }`}
+                        >
+                          <span>{emoji}</span>
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <div className="flex gap-2">
                   <button
                     type="submit"
@@ -526,6 +572,18 @@ export default function AdminPage() {
                         <p className="font-medium text-gray-800 text-sm">{facility.name}</p>
                         {facility.description && (
                           <p className="text-xs text-gray-400 mt-0.5">{facility.description}</p>
+                        )}
+                        {facility.features && facility.features.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {facility.features.map((f) => {
+                              const opt = FACILITY_FEATURE_OPTIONS.find(o => o.label === f);
+                              return (
+                                <span key={f} className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-full text-[10px] font-medium">
+                                  {opt?.emoji} {f}
+                                </span>
+                              );
+                            })}
+                          </div>
                         )}
                       </div>
                       {facility.capacity && (

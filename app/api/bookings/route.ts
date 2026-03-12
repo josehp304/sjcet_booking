@@ -63,14 +63,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Purpose is required' }, { status: 400 });
     }
 
+    const [reqStart, reqEnd] = bookingSession.split('-');
+
     // Check for conflicts (block both confirmed and pending-approval slots)
+    // We check if existing start < new end AND existing end > new start
     const conflictCheck = await pool.query(
-      "SELECT id FROM bookings WHERE facility_id = $1 AND booking_date = $2 AND session = $3 AND status IN ('CONFIRMED', 'APPROVAL_PENDING')",
-      [facilityId, date, bookingSession]
+      `SELECT id FROM bookings 
+       WHERE facility_id = $1 
+         AND booking_date = $2 
+         AND status IN ('CONFIRMED', 'APPROVAL_PENDING')
+         AND split_part(session, '-', 1) < $4
+         AND split_part(session, '-', 2) > $3`,
+      [facilityId, date, reqStart, reqEnd]
     );
 
     if (conflictCheck.rows.length > 0) {
-      return NextResponse.json({ error: 'Slot already booked' }, { status: 409 });
+      return NextResponse.json({ error: 'Slot already booked or overlaps with an existing booking' }, { status: 409 });
     }
 
     // HOD and COORDINATOR bookings require admin approval; ADMIN bookings are confirmed immediately

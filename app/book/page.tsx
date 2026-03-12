@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { format } from "date-fns";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 type Facility = {
@@ -11,6 +11,7 @@ type Facility = {
   name: string;
   capacity: number;
   description: string;
+  features: string[];
 };
 
 type Booking = {
@@ -22,6 +23,7 @@ type Booking = {
 export default function BookPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [existingBookings, setExistingBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,8 +33,11 @@ export default function BookPage() {
 
   const [selectedFacility, setSelectedFacility] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
-  const [selectedSessions, setSelectedSessions] = useState<string[]>(["FORENOON"]);
+  const [startTime, setStartTime] = useState("09:00");
+  const [endTime, setEndTime] = useState("10:00");
   const [purpose, setPurpose] = useState("");
+
+
 
   useEffect(() => {
     async function fetchFacilities() {
@@ -41,9 +46,9 @@ export default function BookPage() {
         if (res.ok) {
           const data = await res.json();
           setFacilities(data);
-          if (data.length > 0) {
-            setSelectedFacility(data[0].id.toString());
-          }
+          const paramFacility = searchParams.get("facility");
+          const match = paramFacility && data.find((f: Facility) => f.id.toString() === paramFacility);
+          setSelectedFacility(match ? paramFacility : data[0]?.id.toString() ?? "");
         }
       } catch (error) {
         console.error("Failed to fetch facilities", error);
@@ -70,65 +75,69 @@ export default function BookPage() {
     fetchBookingsForDate();
   }, [selectedDate]);
 
-  const getSlotBooking = (session: string) =>
-    existingBookings.find(
-      (b) => b.facility_id === parseInt(selectedFacility) && b.session === session
-    );
+  const isSlotTaken = (slotStart: string, slotEnd: string) => {
+    return existingBookings.some((b) => {
+      if (b.facility_id !== parseInt(selectedFacility)) return false;
+      const [bStart, bEnd] = b.session.split('-');
+      if (!bStart || !bEnd) return false;
+      return bStart < slotEnd && bEnd > slotStart;
+    });
+  };
 
-  const isSlotTaken = (session: string) => {
-    return existingBookings.some(
-      (b) => b.facility_id === parseInt(selectedFacility) && b.session === session
-    );
+  const getSlotBookingStatus = (slotStart: string, slotEnd: string) => {
+    const booking = existingBookings.find((b) => {
+      if (b.facility_id !== parseInt(selectedFacility)) return false;
+      const [bStart, bEnd] = b.session.split('-');
+      if (!bStart || !bEnd) return false;
+      return bStart < slotEnd && bEnd > slotStart;
+    });
+    return booking?.status;
   };
 
   const selectedFacilityObj = facilities.find(f => f.id.toString() === selectedFacility);
-
-  const toggleSession = (session: string) => {
-    setSelectedSessions(prev =>
-      prev.includes(session) ? prev.filter(s => s !== session) : [...prev, session]
-    );
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setSuccess("");
-    if (selectedSessions.length === 0) {
-      setError("Please select at least one session.");
+    
+    if (!startTime || !endTime) {
+      setError("Please select both start and end times.");
       return;
     }
+    if (startTime >= endTime) {
+      setError("End time must be after start time.");
+      return;
+    }
+    if (isSlotTaken(startTime, endTime)) {
+      setError("The selected time overlaps with an existing booking.");
+      return;
+    }
+    
     setSubmitting(true);
 
     try {
-      const results = await Promise.all(
-        selectedSessions.map(session =>
-          fetch("/api/bookings", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              facilityId: parseInt(selectedFacility),
-              date: selectedDate,
-              session,
-              purpose,
-            }),
-          })
-        )
-      );
+      const res = await fetch("/api/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          facilityId: parseInt(selectedFacility),
+          date: selectedDate,
+          session: `${startTime}-${endTime}`,
+          purpose,
+        }),
+      });
 
-      const allResults = await Promise.all(results.map(r => r.json()));
-      const errors = allResults
-        .filter(data => data.error)
-        .map(data => data.error === 'Slot already booked' ? 'One or more slots are already booked.' : data.error);
+      const data = await res.json();
 
-      if (errors.length === 0) {
-        const label = selectedSessions.length === 2 ? "Both sessions" : selectedSessions[0] === "FORENOON" ? "Forenoon session" : "Afternoon session";
-        const isPending = allResults.some(data => data.status === 'APPROVAL_PENDING');
+      if (res.ok) {
+        const isPending = data.status === 'APPROVAL_PENDING';
         setSuccess(isPending
-          ? `📋 ${label} submitted for approval. You\'ll be notified once the admin approves it.`
-          : `🎉 ${label} booked successfully!`);
+          ? `📋 Booking submitted for approval. You'll be notified once the admin approves it.`
+          : `🎉 Booked successfully!`);
         setTimeout(() => router.push("/dashboard"), 2500);
       } else {
-        setError(errors.join(" "));
+         setError(data.error === 'Slot already booked or overlaps with an existing booking' ? 'The selected time slot overlaps with an existing booking.' : (data.error || "An error occurred."));
       }
     } catch (err) {
       setError("An error occurred. Please try again.");
@@ -195,6 +204,18 @@ export default function BookPage() {
             {selectedFacilityObj?.description && (
               <p className="mt-1 text-xs text-gray-400">{selectedFacilityObj.description}</p>
             )}
+            {selectedFacilityObj?.features && selectedFacilityObj.features.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {selectedFacilityObj.features.map((feature) => (
+                  <span
+                    key={feature}
+                    className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100"
+                  >
+                    {feature}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Date picker */}
@@ -212,58 +233,136 @@ export default function BookPage() {
             />
           </div>
 
-          {/* Session selector */}
+          {/* Timeline and Session selector */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Session
+              Daily Availability
             </label>
-            <p className="text-xs text-gray-400 mb-2">You can select one or both sessions.</p>
-            <div className="grid grid-cols-2 gap-3">
-              {(["FORENOON", "AFTERNOON"] as const).map((session) => {
-                const taken = isSlotTaken(session);
-                const selected = selectedSessions.includes(session);
-                return (
-                  <button
-                    key={session}
-                    type="button"
-                    disabled={taken}
-                    onClick={() => !taken && toggleSession(session)}
-                    className={`relative flex flex-col items-start p-4 rounded-xl border-2 transition-all ${
-                      taken
-                        ? getSlotBooking(session)?.status === 'APPROVAL_PENDING'
-                          ? "border-amber-200 bg-amber-50 cursor-not-allowed opacity-70"
-                          : "border-red-200 bg-red-50 cursor-not-allowed opacity-60"
-                        : selected
-                          ? "border-[#E54B3F] bg-red-50"
-                          : "border-gray-200 hover:border-gray-300 bg-white cursor-pointer"
-                    }`}
-                  >
-                    <span className="text-xl mb-1">{session === "FORENOON" ? "🌅" : "🌇"}</span>
-                    <span className="text-sm font-semibold text-gray-800">
-                      {session === "FORENOON" ? "Forenoon" : "Afternoon"}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      {session === "FORENOON" ? "9:00 AM – 1:00 PM" : "2:00 PM – 5:00 PM"}
-                    </span>
-                    {taken && (
-                      <span className={`mt-2 text-xs font-semibold ${
-                        getSlotBooking(session)?.status === 'APPROVAL_PENDING'
-                          ? 'text-amber-600'
-                          : 'text-red-600'
-                      }`}>
-                        {getSlotBooking(session)?.status === 'APPROVAL_PENDING' ? '⏳ Pending Approval' : 'Already Booked'}
-                      </span>
+            <p className="text-xs text-gray-400 mb-3">
+              <span className="inline-block w-3 h-3 rounded-sm bg-green-400 mr-1 align-middle"></span>Available&nbsp;
+              <span className="inline-block w-3 h-3 rounded-sm bg-red-500 mr-1 align-middle ml-2"></span>Booked&nbsp;
+              <span className="inline-block w-3 h-3 rounded-sm bg-amber-400 mr-1 align-middle ml-2"></span>Pending&nbsp;
+              <span className="inline-block w-3 h-3 rounded-sm bg-blue-400 mr-1 align-middle ml-2"></span>Your selection
+            </p>
+
+            {/* Continuous Minute-Precise Timeline */}
+            {(() => {
+              const DAY_START = 8 * 60;   // 08:00 in minutes
+              const DAY_END   = 18 * 60;  // 18:00 in minutes
+              const DAY_SPAN  = DAY_END - DAY_START; // 600 minutes
+
+              const toMinutes = (t: string) => {
+                const [h, m] = t.split(':').map(Number);
+                return h * 60 + m;
+              };
+
+              const toPercent = (mins: number) =>
+                Math.min(100, Math.max(0, ((mins - DAY_START) / DAY_SPAN) * 100));
+
+              // Collect relevant bookings for the selected facility
+              const relevantBookings = existingBookings.filter(
+                (b) => b.facility_id === parseInt(selectedFacility)
+              );
+
+              // Current selection overlay
+              const selStart = startTime ? toMinutes(startTime) : null;
+              const selEnd   = endTime   ? toMinutes(endTime)   : null;
+              const selLeft  = selStart !== null ? toPercent(selStart) : null;
+              const selWidth = (selStart !== null && selEnd !== null && selEnd > selStart)
+                ? toPercent(selEnd) - toPercent(selStart)
+                : null;
+
+              // Hour tick labels: 8 AM … 6 PM
+              const ticks = Array.from({ length: 11 }, (_, i) => i + 8);
+
+              return (
+                <div className="mb-4">
+                  {/* Bar */}
+                  <div className="relative h-8 rounded-lg overflow-hidden border border-gray-200 bg-green-100">
+                    {/* Booked / Pending segments */}
+                    {relevantBookings.map((b, idx) => {
+                      const [bStart, bEnd] = b.session.split('-');
+                      if (!bStart || !bEnd) return null;
+                      const left  = toPercent(toMinutes(bStart));
+                      const right = toPercent(toMinutes(bEnd));
+                      const width = right - left;
+                      if (width <= 0) return null;
+                      const isPending = b.status === 'APPROVAL_PENDING';
+                      return (
+                        <div
+                          key={`seg-${idx}`}
+                          title={`${bStart}–${bEnd} · ${isPending ? 'Pending Approval' : 'Booked'}`}
+                          style={{ left: `${left}%`, width: `${width}%` }}
+                          className={`absolute inset-y-0 ${isPending ? 'bg-amber-400' : 'bg-red-500'}`}
+                        />
+                      );
+                    })}
+
+                    {/* Selected time overlay */}
+                    {selLeft !== null && selWidth !== null && selWidth > 0 && (
+                      <div
+                        title={`Your selection: ${startTime}–${endTime}`}
+                        style={{ left: `${selLeft}%`, width: `${selWidth}%` }}
+                        className="absolute inset-y-0 bg-blue-500/70 border-x-2 border-blue-600"
+                      />
                     )}
-                    {selected && !taken && (
-                      <span className="absolute top-2 right-2 w-4 h-4 bg-[#E54B3F] rounded-full flex items-center justify-center">
-                        <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+
+                    {/* Hour divider lines */}
+                    {ticks.slice(1, -1).map((h) => (
+                      <div
+                        key={`tick-${h}`}
+                        style={{ left: `${toPercent(h * 60)}%` }}
+                        className="absolute inset-y-0 w-px bg-white/40 pointer-events-none"
+                      />
+                    ))}
+                  </div>
+
+                  {/* Hour labels */}
+                  <div className="relative h-4 mt-0.5">
+                    {ticks.map((h) => {
+                      const pct = toPercent(h * 60);
+                      const label = h === 12 ? '12P' : h > 12 ? `${h - 12}P` : `${h}A`;
+                      return (
+                        <span
+                          key={`lbl-${h}`}
+                          style={{ left: `${pct}%`, transform: 'translateX(-50%)' }}
+                          className="absolute text-[9px] text-gray-400 font-medium select-none"
+                        >
+                          {label}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+
+            <label className="block text-sm font-medium text-gray-700 mb-1 mt-6">
+              Select Custom Time
+            </label>
+            <p className="text-xs text-gray-400 mb-2">Choose your exact start and end times.</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Start Time</label>
+                <input
+                  type="time"
+                  required
+                  className="block w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#E54B3F]"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">End Time</label>
+                <input
+                  type="time"
+                  required
+                  className="block w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#E54B3F]"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                />
+              </div>
             </div>
           </div>
 
@@ -298,15 +397,18 @@ export default function BookPage() {
                   </dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt>Session:</dt>
-                  <dd className="font-medium text-gray-800">
-                    {selectedSessions.length === 0
-                      ? "None selected"
-                      : selectedSessions.length === 2
-                        ? "Full Day (Forenoon + Afternoon)"
-                        : selectedSessions[0] === "FORENOON"
-                          ? "Forenoon (9:00 AM – 1:00 PM)"
-                          : "Afternoon (2:00 PM – 5:00 PM)"}
+                  <dt>Time:</dt>
+                  <dd className="font-medium text-gray-800 text-right">
+                    {startTime && endTime ? (() => {
+                      const formatTime = (timeStr: string) => {
+                        const [h, m] = timeStr.split(':');
+                        const hNum = parseInt(h);
+                        const ampm = hNum >= 12 ? 'PM' : 'AM';
+                        const h12 = hNum % 12 || 12;
+                        return `${h12}:${m} ${ampm}`;
+                      };
+                      return `${formatTime(startTime)} – ${formatTime(endTime)}`;
+                    })() : "None selected"}
                   </dd>
                 </div>
                 <div className="flex justify-between">
@@ -323,9 +425,8 @@ export default function BookPage() {
             </Link>
             <button
               type="submit"
-              disabled={submitting || selectedSessions.length === 0 || selectedSessions.every(s => isSlotTaken(s))}
-              className={`flex-1 flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg text-sm font-semibold text-white bg-[#E54B3F] hover:bg-[#d43d32] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#E54B3F] transition-colors ${(submitting || selectedSessions.length === 0 || selectedSessions.every(s => isSlotTaken(s))) ? "opacity-60 cursor-not-allowed" : ""
-                }`}
+              disabled={submitting || !startTime || !endTime || startTime >= endTime || isSlotTaken(startTime, endTime)}
+              className={`flex-1 flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg text-sm font-semibold text-white bg-[#E54B3F] hover:bg-[#d43d32] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#E54B3F] transition-colors ${(submitting || !startTime || !endTime || startTime >= endTime || isSlotTaken(startTime, endTime)) ? "opacity-60 cursor-not-allowed" : ""}`}
             >
               {submitting ? (
                 <>
@@ -335,7 +436,7 @@ export default function BookPage() {
                   </svg>
                   Confirming...
                 </>
-              ) : "Confirm Booking"}
+              ) : "Send for Approval"}
             </button>
           </div>
         </form>

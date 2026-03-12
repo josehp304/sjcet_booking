@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { format, startOfMonth, subMonths, addMonths } from "date-fns";
 import { MonthlyCalendar } from "@/components/monthly-calendar";
+import { TIME_SLOTS } from "@/lib/utils";
 
 type Booking = {
   id: number;
@@ -121,7 +122,7 @@ export default function AvailabilityPage() {
     fetchBookings();
   }, [filterFacility, filterDate]);
 
-  const isBooked = (facilityId: number, session: "FORENOON" | "AFTERNOON") => {
+  const isBooked = (facilityId: number, session: string) => {
     return bookings.find(
       (b) => b.facility_id === facilityId && b.session === session
     );
@@ -238,8 +239,6 @@ export default function AvailabilityPage() {
             <SkeletonCard key={i} />
           ))
         ) : displayFacilities.map((facility) => {
-          const fnBooking = isBooked(facility.id, "FORENOON");
-          const anBooking = isBooked(facility.id, "AFTERNOON");
 
           return (
             <div key={facility.id} className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
@@ -256,46 +255,49 @@ export default function AvailabilityPage() {
                   </span>
                 )}
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-gray-100">
-                {/* Forenoon slot */}
-                <div className={`p-5 ${fnBooking ? "bg-red-50" : "bg-green-50"}`}>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-gray-800">🌅 Forenoon</p>
-                      <p className="text-xs text-gray-500 mt-0.5">9:00 AM – 1:00 PM</p>
-                    </div>
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${fnBooking ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
-                      }`}>
-                      {fnBooking ? "Booked" : "Available"}
-                    </span>
-                  </div>
-                  {fnBooking && (
-                    <div className="mt-3 p-2.5 bg-white rounded-lg border border-red-100">
-                      <p className="text-xs font-medium text-gray-700">{fnBooking.user_name}</p>
-                      <p className="text-xs text-gray-400">{fnBooking.department}</p>
-                      {fnBooking.purpose && <p className="text-xs text-gray-500 mt-1 italic block truncate" title={fnBooking.purpose}>"{fnBooking.purpose}"</p>}
-                    </div>
-                  )}
+              <div className="p-5">
+                <div className="flex h-10 rounded-lg overflow-hidden border border-gray-200 bg-gray-100">
+                  {TIME_SLOTS.map((slot) => {
+                    const booking = isBooked(facility.id, slot.id);
+                    return (
+                      <div
+                        key={slot.id}
+                        title={`${slot.label} ${booking ? (booking.status === 'APPROVAL_PENDING' ? '· Pending Approval' : '· Booked') : '· Available'}`}
+                        className={`flex-1 flex items-center justify-center text-[10px] sm:text-xs font-medium border-r border-white/30 last:border-r-0 transition-colors cursor-default ${
+                          booking 
+                            ? (booking.status === 'APPROVAL_PENDING' ? 'bg-amber-400 text-amber-900' : 'bg-red-500 text-white') 
+                            : 'bg-green-500 hover:bg-green-400 text-white'
+                        }`}
+                      >
+                        {slot.short.replace(' AM', 'a').replace(' PM', 'p')}
+                      </div>
+                    );
+                  })}
                 </div>
-                {/* Afternoon slot */}
-                <div className={`p-5 ${anBooking ? "bg-red-50" : "bg-green-50"}`}>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-gray-800">🌇 Afternoon</p>
-                      <p className="text-xs text-gray-500 mt-0.5">2:00 PM – 5:00 PM</p>
-                    </div>
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${anBooking ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
-                      }`}>
-                      {anBooking ? "Booked" : "Available"}
-                    </span>
-                  </div>
-                  {anBooking && (
-                    <div className="mt-3 p-2.5 bg-white rounded-lg border border-red-100">
-                      <p className="text-xs font-medium text-gray-700">{anBooking.user_name}</p>
-                      <p className="text-xs text-gray-400">{anBooking.department}</p>
-                      {anBooking.purpose && <p className="text-xs text-gray-500 mt-1 italic block truncate" title={anBooking.purpose}>"{anBooking.purpose}"</p>}
-                    </div>
-                  )}
+                
+                {/* Details of Bookings */}
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  {TIME_SLOTS.map(slot => {
+                    const booking = isBooked(facility.id, slot.id);
+                    if (!booking) return null;
+                    return (
+                      <div key={slot.id} className="p-3 bg-red-50 rounded-lg border border-red-100">
+                        <div className="flex justify-between items-start mb-1">
+                          <p className="text-[11px] font-bold text-gray-800">{slot.label}</p>
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                            booking.status === 'APPROVAL_PENDING' ? 'bg-amber-200 text-amber-800' : 'bg-red-200 text-red-800'
+                          }`}>
+                            {booking.status === 'APPROVAL_PENDING' ? 'Pending' : 'Booked'}
+                          </span>
+                        </div>
+                        <p className="text-sm font-medium text-gray-700">{booking.user_name}</p>
+                        <p className="text-xs text-gray-500">{booking.department}</p>
+                        {booking.purpose && (
+                          <p className="text-xs text-gray-600 mt-1 italic truncate" title={booking.purpose}>"{booking.purpose}"</p>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             </div>

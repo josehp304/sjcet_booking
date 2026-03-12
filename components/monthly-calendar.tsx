@@ -10,10 +10,9 @@ import {
     endOfWeek,
     isSameMonth,
     isSameDay,
-    addMonths,
-    subMonths,
 } from "date-fns";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Info } from "lucide-react";
+import { TIME_SLOTS } from "@/lib/utils";
 
 type Booking = {
     id: number;
@@ -52,13 +51,10 @@ export function MonthlyCalendar({ facilityName, bookings, currentMonth, onPrevMo
             return bDateStr === dateStr;
         });
 
-        const hasForenoon = dayBookings.some((b) => b.session === "FORENOON");
-        const hasAfternoon = dayBookings.some((b) => b.session === "AFTERNOON");
-
-        if (hasForenoon && hasAfternoon) return "both";
-        if (hasForenoon) return "forenoon";
-        if (hasAfternoon) return "afternoon";
-        return "available";
+        if (dayBookings.length === 0) return "available";
+        if (dayBookings.length === TIME_SLOTS.length) return "fully_booked";
+        if (dayBookings.length >= TIME_SLOTS.length / 2) return "mostly_booked";
+        return "partially_booked";
     };
 
     const selectedDayBookings = useMemo(() => {
@@ -103,10 +99,10 @@ export function MonthlyCalendar({ facilityName, bookings, currentMonth, onPrevMo
                             <div className="w-3 h-3 rounded-sm bg-green-100 border border-green-300"></div> Available
                         </div>
                         <div className="flex items-center gap-1.5">
-                            <div className="w-3 h-3 rounded-sm bg-yellow-200 border border-yellow-400"></div> Forenoon Booked
+                            <div className="w-3 h-3 rounded-sm bg-yellow-200 border border-yellow-400"></div> Partially Booked
                         </div>
                         <div className="flex items-center gap-1.5">
-                            <div className="w-3 h-3 rounded-sm bg-[#FFAC1C] border border-orange-500"></div> Afternoon Booked
+                            <div className="w-3 h-3 rounded-sm bg-[#FFAC1C] border border-orange-500"></div> Mostly Booked
                         </div>
                         <div className="flex items-center gap-1.5">
                             <div className="w-3 h-3 rounded-sm bg-red-400 border border-red-500 text-white flex items-center justify-center"></div> Fully Booked
@@ -129,9 +125,9 @@ export function MonthlyCalendar({ facilityName, bookings, currentMonth, onPrevMo
 
                             let bgClass = "bg-gray-50 border-gray-100 text-gray-400"; // non-current month
                             if (isCurrentMonth) {
-                                if (status === "both") bgClass = "bg-red-400 border-red-500 text-white hover:bg-red-500 cursor-pointer";
-                                else if (status === "forenoon") bgClass = "bg-yellow-200 border-yellow-400 text-yellow-900 hover:bg-yellow-300 cursor-pointer";
-                                else if (status === "afternoon") bgClass = "bg-[#FFAC1C] border-orange-500 text-orange-900 hover:bg-orange-400 cursor-pointer";
+                                if (status === "fully_booked") bgClass = "bg-red-400 border-red-500 text-white hover:bg-red-500 cursor-pointer";
+                                else if (status === "partially_booked") bgClass = "bg-yellow-200 border-yellow-400 text-yellow-900 hover:bg-yellow-300 cursor-pointer";
+                                else if (status === "mostly_booked") bgClass = "bg-[#FFAC1C] border-orange-500 text-orange-900 hover:bg-orange-400 cursor-pointer";
                                 else bgClass = "bg-green-100 border-green-300 text-green-800 hover:bg-green-200 cursor-pointer";
                             }
 
@@ -166,9 +162,11 @@ export function MonthlyCalendar({ facilityName, bookings, currentMonth, onPrevMo
                             <p className="text-sm">Click on any date in the calendar to view its booking details.</p>
                         </div>
                     ) : (
-                        <div className="space-y-4">
-                            <DetailCard sessionName="Forenoon" sessionTime="9:00 AM – 1:00 PM" booking={selectedDayBookings.find(b => b.session === "FORENOON")} />
-                            <DetailCard sessionName="Afternoon" sessionTime="2:00 PM – 5:00 PM" booking={selectedDayBookings.find(b => b.session === "AFTERNOON")} />
+                        <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                            {TIME_SLOTS.map((slot) => {
+                                const booking = selectedDayBookings.find(b => b.session === slot.id);
+                                return <DetailCard key={slot.id} sessionName={slot.label} booking={booking} />;
+                            })}
                         </div>
                     )}
                 </div>
@@ -177,33 +175,31 @@ export function MonthlyCalendar({ facilityName, bookings, currentMonth, onPrevMo
     );
 }
 
-function DetailCard({ sessionName, sessionTime, booking }: { sessionName: string; sessionTime: string; booking?: Booking }) {
+function DetailCard({ sessionName, booking }: { sessionName: string; booking?: Booking }) {
     if (!booking) {
         return (
-            <div className="p-4 rounded-xl border border-green-100 bg-green-50/50">
-                <h5 className="font-semibold text-green-800 text-sm mb-0.5">{sessionName}</h5>
-                <div className="text-xs text-green-600/80 mb-2">{sessionTime}</div>
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-green-100 text-green-700">
-                    Available
+            <div className="p-3 rounded-lg border border-green-100 bg-green-50/50 flex justify-between items-center">
+                <h5 className="font-semibold text-green-800 text-[11px] uppercase tracking-wider">{sessionName}</h5>
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700">
+                    AVAL
                 </span>
             </div>
         );
     }
 
     return (
-        <div className="p-4 rounded-xl border border-red-100 bg-red-50/30">
-            <h5 className="font-semibold text-gray-900 text-sm mb-0.5">{sessionName}</h5>
-            <div className="text-xs text-gray-500 mb-3">{sessionTime}</div>
-            <div className="space-y-2">
+        <div className="p-3 rounded-lg border border-red-100 bg-red-50/30">
+            <h5 className="font-bold text-gray-900 text-[11px] uppercase tracking-wider mb-2">{sessionName}</h5>
+            <div className="space-y-1">
                 <div className="flex items-start gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-400 mt-1.5 flex-shrink-0"></div>
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-400 mt-1 flex-shrink-0"></div>
                     <div>
-                        <div className="text-sm font-medium text-gray-800">{booking.user_name}</div>
-                        <div className="text-[11px] text-gray-500 font-medium uppercase tracking-wider">{booking.department}</div>
+                        <div className="text-sm font-semibold text-gray-800 leading-none">{booking.user_name}</div>
+                        <div className="text-[10px] text-gray-500 font-medium uppercase mt-0.5 tracking-wider">{booking.department}</div>
                     </div>
                 </div>
                 {booking.purpose && (
-                    <div className="mt-2 text-xs text-gray-600 bg-white p-2.5 rounded border border-gray-100 italic">
+                    <div className="mt-2 text-[11px] text-gray-600 bg-white p-2 rounded border border-gray-100 italic">
                         "{booking.purpose}"
                     </div>
                 )}

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { format } from "date-fns";
 import Link from "next/link";
+import { formatSession, getSessionColor } from "@/lib/utils";
 
 type Booking = {
   id: number;
@@ -28,6 +29,7 @@ export default function DashboardPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [loading, setLoading] = useState(true);
+  const [bookingsOpen, setBookingsOpen] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -55,8 +57,6 @@ export default function DashboardPage() {
     );
   }
 
-  const today = format(new Date(), "yyyy-MM-dd");
-  const todayBookings = bookings.filter(b => b.booking_date?.startsWith(today));
 
   return (
     <div className="space-y-6">
@@ -81,120 +81,103 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          { label: "Total Facilities", value: facilities.length, icon: "🏗️", color: "bg-blue-50 text-blue-700 border-blue-100", tooltip: "Total number of bookable facilities available in the system." },
-          { label: "Bookings This Month", value: bookings.filter(b => new Date(b.booking_date).getMonth() === new Date().getMonth() && new Date(b.booking_date).getFullYear() === new Date().getFullYear()).length, icon: "📋", color: "bg-green-50 text-green-700 border-green-100", tooltip: "Total confirmed and pending bookings made in the current calendar month." },
-          { label: "Today's Bookings", value: todayBookings.length, icon: "📅", color: "bg-orange-50 text-orange-700 border-orange-100", tooltip: "Number of bookings (confirmed or pending) scheduled for today." },
-          { label: "Available Slots", value: facilities.length * 2 - todayBookings.length, icon: "✅", color: "bg-purple-50 text-purple-700 border-purple-100", tooltip: "Remaining bookable sessions today. Each facility has 2 sessions (Forenoon + Afternoon)." },
-        ].map((stat) => (
-          <div key={stat.label} title={stat.tooltip} className={`relative rounded-xl border p-4 cursor-default group ${stat.color}`}>
-            <div className="text-2xl mb-1">{stat.icon}</div>
-            <div className="text-2xl font-bold">{stat.value}</div>
-            <div className="text-xs font-medium mt-0.5">{stat.label}</div>
-            {/* Tooltip */}
-            <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 rounded-lg bg-gray-800 text-white text-xs px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-10 shadow-lg text-center">
-              {stat.tooltip}
-              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
-            </div>
-          </div>
-        ))}
-      </div>
 
       {/* Main content grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Bookings table */}
-        <div className="lg:col-span-2 bg-white shadow-sm overflow-hidden rounded-xl border border-gray-200">
-          <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
-            <h3 className="text-base font-semibold text-gray-900">Recent Bookings</h3>
-            <Link href="/availability" className="text-[#E54B3F] text-sm font-medium hover:underline">
-              View All →
-            </Link>
+
+        {/* Facilities list — PRIMARY (col-span-2) */}
+        <div className="lg:col-span-2 bg-white shadow-sm rounded-xl border border-gray-200">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h3 className="text-base font-semibold text-gray-900">Available Facilities</h3>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-100">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Facility</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Session</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Dept</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Purpose</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-100">
-                {bookings.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-5 py-8 text-sm text-gray-400 text-center">
-                      No bookings yet. <Link href="/book" className="text-[#E54B3F] font-medium hover:underline">Make the first one!</Link>
-                    </td>
-                  </tr>
-                ) : (
-                  bookings.slice(0, 8).map((booking) => (
-                    <tr key={booking.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-5 py-3 text-sm font-medium text-gray-800">{booking.facility_name}</td>
-                      <td className="px-5 py-3 text-sm text-gray-500">
-                        {format(new Date(booking.booking_date), "MMM dd, yyyy")}
-                      </td>
-                      <td className="px-5 py-3">
-                        <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${booking.session === "FORENOON" ? "bg-sky-100 text-sky-700" : "bg-violet-100 text-violet-700"
-                          }`}>
-                          {booking.session === "FORENOON" ? "🌅 FN" : "🌇 AN"}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-xs text-gray-500">{booking.department}</td>
-                      <td className="px-5 py-3 text-xs text-gray-500 max-w-[150px] truncate" title={booking.purpose || ""}>{booking.purpose || "-"}</td>
-                      <td className="px-5 py-3">
-                        <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${
+          <ul className="divide-y divide-gray-100">
+            {facilities.map((facility) => (
+              <li key={facility.id} className="px-5 py-4 hover:bg-gray-50 transition-colors">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-800">{facility.name}</p>
+                    {facility.description && (
+                      <p className="text-xs text-gray-400 mt-0.5">{facility.description}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    {facility.capacity && (
+                      <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-xs font-medium rounded">
+                        Cap: {facility.capacity}
+                      </span>
+                    )}
+                    <Link
+                      href={`/book?facility=${facility.id}`}
+                      className="px-3 py-1.5 bg-[#E54B3F] text-white text-xs font-semibold rounded-lg hover:bg-[#d43d32] transition-colors"
+                    >
+                      Book Now
+                    </Link>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Recent Bookings — SECONDARY (col-span-1, collapsible) */}
+        <div className="bg-white shadow-sm overflow-hidden rounded-xl border border-gray-200 self-start">
+          <button
+            onClick={() => setBookingsOpen((o) => !o)}
+            className="w-full px-5 py-4 flex justify-between items-center hover:bg-gray-50 transition-colors"
+          >
+            <span className="text-base font-semibold text-gray-900">Recent Bookings</span>
+            <svg
+              className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${bookingsOpen ? 'rotate-180' : ''}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {bookingsOpen && (
+            <div className="border-t border-gray-100">
+              {bookings.length === 0 ? (
+                <p className="px-5 py-8 text-sm text-gray-400 text-center">
+                  No bookings yet.{" "}
+                  <Link href="/book" className="text-[#E54B3F] font-medium hover:underline">Make the first one!</Link>
+                </p>
+              ) : (
+                <ul className="divide-y divide-gray-100 max-h-[480px] overflow-y-auto">
+                  {bookings.slice(0, 8).map((booking) => (
+                    <li key={booking.id} className="px-5 py-3 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-800 truncate">{booking.facility_name}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {format(new Date(booking.booking_date), "MMM dd, yyyy")}
+                          </p>
+                          <p className="text-xs text-gray-400 truncate mt-0.5" title={booking.purpose || ""}>
+                            {booking.purpose || "—"}
+                          </p>
+                        </div>
+                        <span className={`shrink-0 px-2 py-0.5 text-xs font-semibold rounded-full ${
                           booking.status === "CONFIRMED"
                             ? "bg-green-100 text-green-700"
                             : booking.status === "APPROVAL_PENDING"
                             ? "bg-amber-100 text-amber-700"
                             : "bg-red-100 text-red-600"
                         }`}>
-                          {booking.status === "APPROVAL_PENDING" ? "⏳ Pending" : booking.status}
+                          {booking.status === "APPROVAL_PENDING" ? "Pending" : booking.status}
                         </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="px-5 py-3 border-t border-gray-100">
+                <Link href="/availability" className="block w-full text-center py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
+                  View All →
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Facilities list */}
-        <div className="bg-white shadow-sm rounded-xl border border-gray-200">
-          <div className="px-5 py-4 border-b border-gray-100">
-            <h3 className="text-base font-semibold text-gray-900">Available Facilities</h3>
-          </div>
-          <ul className="divide-y divide-gray-100 max-h-80 overflow-y-auto">
-            {facilities.map((facility) => (
-              <li key={facility.id} className="px-5 py-3 hover:bg-gray-50 transition-colors">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">{facility.name}</p>
-                    {facility.description && (
-                      <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{facility.description}</p>
-                    )}
-                  </div>
-                  {facility.capacity && (
-                    <span className="ml-2 px-1.5 py-0.5 bg-gray-100 text-gray-600 text-xs rounded flex-shrink-0">
-                      {facility.capacity}
-                    </span>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-          <div className="px-5 py-3 border-t border-gray-100">
-            <Link href="/book" className="block w-full text-center py-2 bg-[#E54B3F] text-white text-sm font-semibold rounded-lg hover:bg-[#d43d32] transition-colors">
-              Book a Facility
-            </Link>
-          </div>
-        </div>
       </div>
     </div>
   );
