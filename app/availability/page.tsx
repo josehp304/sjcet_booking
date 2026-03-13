@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { format, startOfMonth, subMonths, addMonths } from "date-fns";
 import { MonthlyCalendar } from "@/components/monthly-calendar";
-import { TIME_SLOTS } from "@/lib/utils";
 
 type Booking = {
   id: number;
@@ -122,12 +121,6 @@ export default function AvailabilityPage() {
     fetchBookings();
   }, [filterFacility, filterDate]);
 
-  const isBooked = (facilityId: number, session: string) => {
-    return bookings.find(
-      (b) => b.facility_id === facilityId && b.session === session
-    );
-  };
-
   const displayFacilities = filterFacility === "all"
     ? facilities
     : facilities.filter(f => f.id === parseInt(filterFacility));
@@ -221,16 +214,11 @@ export default function AvailabilityPage() {
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap gap-4 text-sm">
-        <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 rounded bg-green-500"></div>
-          <span className="text-gray-600">Available</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 rounded bg-red-400"></div>
-          <span className="text-gray-600">Booked</span>
-        </div>
-      </div>
+      <p className="text-xs text-gray-400">
+        <span className="inline-block w-3 h-3 rounded-sm bg-green-400 mr-1 align-middle"></span>Available&nbsp;
+        <span className="inline-block w-3 h-3 rounded-sm bg-red-500 mr-1 align-middle ml-2"></span>Booked&nbsp;
+        <span className="inline-block w-3 h-3 rounded-sm bg-amber-400 mr-1 align-middle ml-2"></span>Pending
+      </p>
 
       {/* Availability Grid */}
       <div className="grid grid-cols-1 gap-4">
@@ -256,38 +244,88 @@ export default function AvailabilityPage() {
                 )}
               </div>
               <div className="p-5">
-                <div className="flex h-10 rounded-lg overflow-hidden border border-gray-200 bg-gray-100">
-                  {TIME_SLOTS.map((slot) => {
-                    const booking = isBooked(facility.id, slot.id);
-                    return (
-                      <div
-                        key={slot.id}
-                        title={`${slot.label} ${booking ? (booking.status === 'APPROVAL_PENDING' ? '· Pending Approval' : '· Booked') : '· Available'}`}
-                        className={`flex-1 flex items-center justify-center text-[10px] sm:text-xs font-medium border-r border-white/30 last:border-r-0 transition-colors cursor-default ${
-                          booking 
-                            ? (booking.status === 'APPROVAL_PENDING' ? 'bg-amber-400 text-amber-900' : 'bg-red-500 text-white') 
-                            : 'bg-green-500 hover:bg-green-400 text-white'
-                        }`}
-                      >
-                        {slot.short.replace(' AM', 'a').replace(' PM', 'p')}
+                {/* Minute-Precise Timeline */}
+                {(() => {
+                  const DAY_START = 8 * 60;  // 08:00 in minutes
+                  const DAY_END   = 18 * 60; // 18:00 in minutes
+                  const DAY_SPAN  = DAY_END - DAY_START;
+
+                  const toMinutes = (t: string) => {
+                    const [h, m] = t.split(':').map(Number);
+                    return h * 60 + m;
+                  };
+
+                  const toPercent = (mins: number) =>
+                    Math.min(100, Math.max(0, ((mins - DAY_START) / DAY_SPAN) * 100));
+
+                  const facilityBookings = bookings.filter(b => b.facility_id === facility.id);
+                  const ticks = Array.from({ length: 11 }, (_, i) => i + 8);
+
+                  return (
+                    <div className="mb-4">
+                      {/* Bar */}
+                      <div className="relative h-8 rounded-lg overflow-hidden border border-gray-200 bg-green-100">
+                        {facilityBookings.map((b, idx) => {
+                          const [bStart, bEnd] = b.session.split('-');
+                          if (!bStart || !bEnd) return null;
+                          const left  = toPercent(toMinutes(bStart));
+                          const right = toPercent(toMinutes(bEnd));
+                          const width = right - left;
+                          if (width <= 0) return null;
+                          const isPending = b.status === 'APPROVAL_PENDING';
+                          return (
+                            <div
+                              key={`seg-${idx}`}
+                              title={`${bStart}–${bEnd} · ${isPending ? 'Pending Approval' : 'Booked'}`}
+                              style={{ left: `${left}%`, width: `${width}%` }}
+                              className={`absolute inset-y-0 ${isPending ? 'bg-amber-400' : 'bg-red-500'}`}
+                            />
+                          );
+                        })}
+
+                        {/* Hour divider lines */}
+                        {ticks.slice(1, -1).map((h) => (
+                          <div
+                            key={`tick-${h}`}
+                            style={{ left: `${toPercent(h * 60)}%` }}
+                            className="absolute inset-y-0 w-px bg-white/40 pointer-events-none"
+                          />
+                        ))}
                       </div>
-                    );
-                  })}
-                </div>
-                
+
+                      {/* Hour labels */}
+                      <div className="relative h-4 mt-0.5">
+                        {ticks.map((h) => {
+                          const pct = toPercent(h * 60);
+                          const label = h === 12 ? '12P' : h > 12 ? `${h - 12}P` : `${h}A`;
+                          return (
+                            <span
+                              key={`lbl-${h}`}
+                              style={{ left: `${pct}%`, transform: 'translateX(-50%)' }}
+                              className="absolute text-[9px] text-gray-400 font-medium select-none"
+                            >
+                              {label}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Details of Bookings */}
                 <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                  {TIME_SLOTS.map(slot => {
-                    const booking = isBooked(facility.id, slot.id);
-                    if (!booking) return null;
+                  {bookings.filter(b => b.facility_id === facility.id).map((booking, idx) => {
+                    const [bStart, bEnd] = booking.session.split('-');
+                    const isPending = booking.status === 'APPROVAL_PENDING';
                     return (
-                      <div key={slot.id} className="p-3 bg-red-50 rounded-lg border border-red-100">
+                      <div key={idx} className={`p-3 rounded-lg border ${isPending ? 'bg-amber-50 border-amber-100' : 'bg-red-50 border-red-100'}`}>
                         <div className="flex justify-between items-start mb-1">
-                          <p className="text-[11px] font-bold text-gray-800">{slot.label}</p>
+                          <p className="text-[11px] font-bold text-gray-800">{bStart} – {bEnd}</p>
                           <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
-                            booking.status === 'APPROVAL_PENDING' ? 'bg-amber-200 text-amber-800' : 'bg-red-200 text-red-800'
+                            isPending ? 'bg-amber-200 text-amber-800' : 'bg-red-200 text-red-800'
                           }`}>
-                            {booking.status === 'APPROVAL_PENDING' ? 'Pending' : 'Booked'}
+                            {isPending ? 'Pending' : 'Booked'}
                           </span>
                         </div>
                         <p className="text-sm font-medium text-gray-700">{booking.user_name}</p>
@@ -296,7 +334,7 @@ export default function AvailabilityPage() {
                           <p className="text-xs text-gray-600 mt-1 italic truncate" title={booking.purpose}>"{booking.purpose}"</p>
                         )}
                       </div>
-                    )
+                    );
                   })}
                 </div>
               </div>

@@ -12,6 +12,9 @@ type Facility = {
   capacity: number;
   description: string;
   features: string[];
+  custodian_id: number | null;
+  custodian_name: string | null;
+  custodian_department: string | null;
 };
 
 type Booking = {
@@ -36,6 +39,7 @@ export default function BookPage() {
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("10:00");
   const [purpose, setPurpose] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
 
 
 
@@ -125,6 +129,7 @@ export default function BookPage() {
           date: selectedDate,
           session: `${startTime}-${endTime}`,
           purpose,
+          phoneNumber,
         }),
       });
 
@@ -132,8 +137,9 @@ export default function BookPage() {
 
       if (res.ok) {
         const isPending = data.status === 'APPROVAL_PENDING';
+        const custodian = selectedFacilityObj?.custodian_name;
         setSuccess(isPending
-          ? `📋 Booking submitted for approval. You'll be notified once the admin approves it.`
+          ? `📋 Booking request sent to ${custodian ? custodian + ' (Custodian)' : 'the admin'} for approval.`
           : `🎉 Booked successfully!`);
         setTimeout(() => router.push("/dashboard"), 2500);
       } else {
@@ -214,6 +220,18 @@ export default function BookPage() {
                     {feature}
                   </span>
                 ))}
+              </div>
+            )}
+            {/* Custodian / Approval notice */}
+            {selectedFacilityObj && user?.role !== 'ADMIN' && (
+              <div className="mt-2 flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200">
+                <span className="text-amber-500 mt-0.5">🔑</span>
+                <p className="text-xs text-amber-700">
+                  {selectedFacilityObj.custodian_name
+                    ? <>Booking requests for this facility are reviewed by <strong>{selectedFacilityObj.custodian_name}</strong>{selectedFacilityObj.custodian_department ? ` (${selectedFacilityObj.custodian_department})` : ''} before confirmation.</>
+                    : <>No custodian assigned. Booking requests will be reviewed by the <strong>Admin</strong>.</>
+                  }
+                </p>
               </div>
             )}
           </div>
@@ -378,6 +396,25 @@ export default function BookPage() {
               placeholder="Enter the purpose of this booking"
               value={purpose}
               onChange={(e) => setPurpose(e.target.value)}
+            />
+          </div>
+
+          {/* Phone number field */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Contact Phone Number
+            </label>
+            <p className="text-xs text-gray-400 mb-1.5">
+              📱 Used to send booking status notifications.
+            </p>
+            <input
+              type="tel"
+              required
+              pattern="[0-9+\-\s()]{7,20}"
+              className="block w-full border border-gray-300 rounded-lg py-2.5 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#E54B3F] focus:border-[#E54B3F]"
+              placeholder="e.g. +91 98765 43210"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
             />
           </div>
 

@@ -3,6 +3,8 @@ import pool from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import bcrypt from 'bcryptjs';
 
+const VALID_ROLES = ['ADMIN', 'HOD', 'COORDINATOR', 'CUSTODIAN'];
+
 export async function GET() {
   try {
     const session = await getSession();
@@ -11,7 +13,7 @@ export async function GET() {
     }
 
     const result = await pool.query(
-      'SELECT id, name, email, role, department, created_at FROM users ORDER BY name ASC'
+      'SELECT id, name, email, role, department, phone_number, position, is_active, registration_status, created_at FROM users ORDER BY registration_status ASC, name ASC'
     );
     return NextResponse.json(result.rows);
   } catch (error) {
@@ -28,6 +30,11 @@ export async function POST(request: Request) {
     }
 
     const { name, email, password, role, department } = await request.json();
+
+    if (!VALID_ROLES.includes(role)) {
+      return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
+    }
+
     const passwordHash = await bcrypt.hash(password, 10);
 
     const result = await pool.query(

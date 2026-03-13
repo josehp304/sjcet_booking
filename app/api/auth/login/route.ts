@@ -20,6 +20,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
+    // Block accounts that are pending approval or rejected
+    if (!user.is_active) {
+      const isPending = user.registration_status === 'PENDING';
+      return NextResponse.json({
+        error: isPending
+          ? 'Your account is pending admin approval. Please wait for activation.'
+          : 'Your registration request was not approved. Please contact the admin.',
+      }, { status: 403 });
+    }
+
     const { password_hash, ...userWithoutPassword } = user;
     await login(userWithoutPassword);
 

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import Link from "next/link";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -147,6 +148,12 @@ export default function LoginPage() {
               </div>
             </div>
           </div>
+          <p className="text-center text-sm text-gray-500 mt-4">
+              New coordinator?{" "}
+              <Link href="/register" className="font-medium text-[#E54B3F] hover:text-[#d43d32]">
+                Request an account
+              </Link>
+            </p>
         </div>
       </div>
 

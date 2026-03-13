@@ -160,9 +160,11 @@ export default function DashboardPage() {
                             ? "bg-green-100 text-green-700"
                             : booking.status === "APPROVAL_PENDING"
                             ? "bg-amber-100 text-amber-700"
+                            : booking.status === "DENIED"
+                            ? "bg-red-200 text-red-800"
                             : "bg-red-100 text-red-600"
                         }`}>
-                          {booking.status === "APPROVAL_PENDING" ? "Pending" : booking.status}
+                          {booking.status === "APPROVAL_PENDING" ? "Pending" : booking.status === "DENIED" ? "❌ Denied" : booking.status}
                         </span>
                       </div>
                     </li>

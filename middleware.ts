@@ -6,7 +6,8 @@ export async function middleware(request: NextRequest) {
   const session = request.cookies.get('session')?.value;
   const payload = session ? await decrypt(session) : null;
 
-  const isAuthPage = request.nextUrl.pathname.startsWith('/login');
+  const isAuthPage = request.nextUrl.pathname.startsWith('/login') ||
+                     request.nextUrl.pathname.startsWith('/register');
   const isApiRoute = request.nextUrl.pathname.startsWith('/api');
 
   if (!payload && !isAuthPage && !isApiRoute) {
@@ -18,6 +19,11 @@ export async function middleware(request: NextRequest) {
   }
 
   if (payload && request.nextUrl.pathname.startsWith('/admin') && payload.user.role !== 'ADMIN') {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+
+  if (payload && request.nextUrl.pathname.startsWith('/custodian') &&
+    payload.user.role !== 'CUSTODIAN' && payload.user.role !== 'HOD' && payload.user.role !== 'ADMIN') {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 

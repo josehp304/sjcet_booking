@@ -18,13 +18,7 @@ type Booking = {
   purpose: string;
 };
 
-type Facility = {
-  id: number;
-  name: string;
-  capacity: number;
-  description: string;
-  features: string[];
-};
+
 
 type User = {
   id: number;
@@ -32,6 +26,20 @@ type User = {
   email: string;
   role: string;
   department: string;
+  phone_number: string | null;
+  position: string | null;
+  is_active: boolean;
+  registration_status: string;
+};
+
+type Facility = {
+  id: number;
+  name: string;
+  capacity: number;
+  description: string;
+  features: string[];
+  custodian_id: number | null;
+  custodian_name: string | null;
 };
 
 type Tab = "bookings" | "facilities" | "users";
@@ -46,32 +54,31 @@ export default function AdminPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [approvingId, setApprovingId] = useState<number | null>(null);
+  const [approvingUserId, setApprovingUserId] = useState<number | null>(null);
+  const [rejectingUserId, setRejectingUserId] = useState<number | null>(null);
 
   // New facility form
   const [newFacilityName, setNewFacilityName] = useState("");
   const [newFacilityCapacity, setNewFacilityCapacity] = useState("");
   const [newFacilityDesc, setNewFacilityDesc] = useState("");
   const [newFacilityFeatures, setNewFacilityFeatures] = useState<string[]>([]);
+  const [featureInput, setFeatureInput] = useState("");
+  const [newFacilityCustodianId, setNewFacilityCustodianId] = useState<string>("");
   const [facilityMsg, setFacilityMsg] = useState<{ type: "error" | "success"; msg: string } | null>(null);
   const [addingFacility, setAddingFacility] = useState(false);
   const [editingFacilityId, setEditingFacilityId] = useState<number | null>(null);
   const [deletingFacilityId, setDeletingFacilityId] = useState<number | null>(null);
 
-  const FACILITY_FEATURE_OPTIONS = [
-    { label: "Mic", emoji: "🎤" },
-    { label: "Speakers", emoji: "🔊" },
-    { label: "Podium", emoji: "🎙️" },
-    { label: "Projector", emoji: "📽️" },
-    { label: "AC", emoji: "❄️" },
-    { label: "WiFi", emoji: "📶" },
-    { label: "Whiteboard", emoji: "📋" },
-    { label: "TV Screen", emoji: "📺" },
-  ];
+  const addFeature = () => {
+    const trimmed = featureInput.trim();
+    if (trimmed && !newFacilityFeatures.includes(trimmed)) {
+      setNewFacilityFeatures(prev => [...prev, trimmed]);
+    }
+    setFeatureInput("");
+  };
 
-  const toggleFeature = (feature: string) => {
-    setNewFacilityFeatures(prev =>
-      prev.includes(feature) ? prev.filter(f => f !== feature) : [...prev, feature]
-    );
+  const removeFeature = (feature: string) => {
+    setNewFacilityFeatures(prev => prev.filter(f => f !== feature));
   };
 
   // New user form
@@ -133,6 +140,37 @@ export default function AdminPage() {
     }
   };
 
+  const handleApproveUser = async (id: number) => {
+    setApprovingUserId(id);
+    try {
+      const res = await fetch(`/api/users/${id}/approve`, { method: "PATCH" });
+      if (res.ok) {
+        const updated = await res.json();
+        setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updated } : u));
+      } else {
+        alert("Failed to approve registration.");
+      }
+    } finally {
+      setApprovingUserId(null);
+    }
+  };
+
+  const handleRejectUser = async (id: number) => {
+    if (!confirm("Reject this registration request? The user will not be able to log in.")) return;
+    setRejectingUserId(id);
+    try {
+      const res = await fetch(`/api/users/${id}/reject`, { method: "PATCH" });
+      if (res.ok) {
+        const updated = await res.json();
+        setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updated } : u));
+      } else {
+        alert("Failed to reject registration.");
+      }
+    } finally {
+      setRejectingUserId(null);
+    }
+  };
+
   const handleSaveFacility = async (e: React.FormEvent) => {
     e.preventDefault();
     setFacilityMsg(null);
@@ -150,6 +188,7 @@ export default function AdminPage() {
           capacity: newFacilityCapacity ? parseInt(newFacilityCapacity) : null,
           description: newFacilityDesc,
           features: newFacilityFeatures,
+          custodian_id: newFacilityCustodianId ? parseInt(newFacilityCustodianId) : null,
         }),
       });
       if (res.ok) {
@@ -176,6 +215,8 @@ export default function AdminPage() {
     setNewFacilityCapacity("");
     setNewFacilityDesc("");
     setNewFacilityFeatures([]);
+    setFeatureInput("");
+    setNewFacilityCustodianId("");
     setEditingFacilityId(null);
   };
 
@@ -185,6 +226,7 @@ export default function AdminPage() {
     setNewFacilityCapacity(facility.capacity ? facility.capacity.toString() : "");
     setNewFacilityDesc(facility.description || "");
     setNewFacilityFeatures(facility.features || []);
+    setNewFacilityCustodianId(facility.custodian_id ? facility.custodian_id.toString() : "");
     setFacilityMsg(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -279,8 +321,11 @@ export default function AdminPage() {
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: "bookings", label: "All Bookings", count: bookings.length },
     { id: "facilities", label: "Facilities", count: facilities.length },
-    { id: "users", label: "Users", count: users.length },
+    { id: "users", label: "Users", count: users.length, },
   ];
+
+  const pendingRegistrations = users.filter(u => u.registration_status === 'PENDING');
+  const activeUsers = users.filter(u => u.registration_status !== 'PENDING');
 
   return (
     <div className="space-y-6">
@@ -308,7 +353,7 @@ export default function AdminPage() {
         {[
           { label: `Bookings This Month`, value: bookings.filter(b => new Date(b.booking_date).getMonth() === new Date().getMonth() && new Date(b.booking_date).getFullYear() === new Date().getFullYear()).length, icon: "📋", tooltip: "Total confirmed and pending bookings made in the current calendar month." },
           { label: "Facilities", value: facilities.length, icon: "🏗️", tooltip: "Total number of facilities registered and available for booking." },
-          { label: "HOD / Coordinators", value: users.filter(u => u.role === "HOD" || u.role === "COORDINATOR").length, icon: "👨‍🏫", tooltip: "Number of HOD and Coordinator accounts. Their bookings require admin approval before being confirmed." },
+          { label: "Custodians/HODs", value: users.filter(u => u.role === "HOD" || u.role === "COORDINATOR" || u.role === "CUSTODIAN").length, icon: "👨‍🏫", tooltip: "Number of HOD, Coordinator, and Custodian accounts. Their bookings require custodian approval before being confirmed." },
         ].map((stat) => (
           <div key={stat.label} title={stat.tooltip} className="relative bg-white rounded-xl border border-gray-200 p-4 text-center shadow-sm cursor-default group">
             <div className="text-2xl mb-1">{stat.icon}</div>
@@ -403,9 +448,11 @@ export default function AdminPage() {
                               ? "bg-green-100 text-green-700"
                               : booking.status === "APPROVAL_PENDING"
                               ? "bg-amber-100 text-amber-700"
+                              : booking.status === "DENIED"
+                              ? "bg-red-200 text-red-800"
                               : "bg-red-100 text-red-600"
                           }`}>
-                            {booking.status === "APPROVAL_PENDING" ? "⏳ Pending" : booking.status}
+                            {booking.status === "APPROVAL_PENDING" ? "⏳ Pending" : booking.status === "DENIED" ? "❌ Denied" : booking.status}
                           </span>
                         </td>
                         <td className="px-5 py-3 text-right">
@@ -503,28 +550,67 @@ export default function AdminPage() {
                   />
                 </div>
                 <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Custodian</label>
+                  <p className="text-xs text-gray-400 mb-2">Assign a custodian who approves bookings for this facility.</p>
+                  <select
+                    className="block w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#E54B3F] focus:border-[#E54B3F]"
+                    value={newFacilityCustodianId}
+                    onChange={(e) => setNewFacilityCustodianId(e.target.value)}
+                  >
+                    <option value="">— No custodian —</option>
+                    {users
+                      .filter((u) => u.role === "CUSTODIAN" || u.role === "HOD" || u.role === "ADMIN")
+                      .map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} ({u.role}{u.department ? ` · ${u.department}` : ""})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Features</label>
-                  <p className="text-xs text-gray-400 mb-2">Select available amenities for this facility.</p>
-                  <div className="flex flex-wrap gap-2">
-                    {FACILITY_FEATURE_OPTIONS.map(({ label, emoji }) => {
-                      const selected = newFacilityFeatures.includes(label);
-                      return (
-                        <button
-                          key={label}
-                          type="button"
-                          onClick={() => toggleFeature(label)}
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
-                            selected
-                              ? "bg-[#E54B3F] text-white border-[#E54B3F] shadow-sm"
-                              : "bg-white text-gray-600 border-gray-300 hover:border-[#E54B3F] hover:text-[#E54B3F]"
-                          }`}
-                        >
-                          <span>{emoji}</span>
-                          {label}
-                        </button>
-                      );
-                    })}
+                  <p className="text-xs text-gray-400 mb-2">Type a feature name and press Enter or click Add.</p>
+                  {/* Tag input row */}
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      type="text"
+                      value={featureInput}
+                      onChange={(e) => setFeatureInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") { e.preventDefault(); addFeature(); }
+                      }}
+                      placeholder="e.g. Projector, AC, WiFi…"
+                      className="flex-1 border border-gray-300 rounded-lg py-1.5 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#E54B3F] focus:border-[#E54B3F]"
+                    />
+                    <button
+                      type="button"
+                      onClick={addFeature}
+                      className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors border border-gray-200"
+                    >
+                      Add
+                    </button>
                   </div>
+                  {/* Tag list */}
+                  {newFacilityFeatures.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {newFacilityFeatures.map((f) => (
+                        <span
+                          key={f}
+                          className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100"
+                        >
+                          {f}
+                          <button
+                            type="button"
+                            onClick={() => removeFeature(f)}
+                            className="ml-0.5 text-indigo-400 hover:text-red-500 transition-colors leading-none"
+                            aria-label={`Remove ${f}`}
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -573,16 +659,26 @@ export default function AdminPage() {
                         {facility.description && (
                           <p className="text-xs text-gray-400 mt-0.5">{facility.description}</p>
                         )}
+                        {facility.custodian_name ? (
+                          <p className="text-xs mt-1">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full text-[10px] font-medium">
+                              🔑 Custodian: {facility.custodian_name}
+                            </span>
+                          </p>
+                        ) : (
+                          <p className="text-xs mt-1">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-50 text-gray-400 border border-gray-100 rounded-full text-[10px] font-medium">
+                              ⚠️ No custodian assigned
+                            </span>
+                          </p>
+                        )}
                         {facility.features && facility.features.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-1.5">
-                            {facility.features.map((f) => {
-                              const opt = FACILITY_FEATURE_OPTIONS.find(o => o.label === f);
-                              return (
-                                <span key={f} className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-full text-[10px] font-medium">
-                                  {opt?.emoji} {f}
-                                </span>
-                              );
-                            })}
+                            {facility.features.map((f) => (
+                              <span key={f} className="inline-flex items-center px-2 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-full text-[10px] font-medium">
+                                {f}
+                              </span>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -617,92 +713,134 @@ export default function AdminPage() {
 
       {/* Users Tab */}
       {activeTab === "users" && (
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-          <div className="md:col-span-2">
-            <div className="bg-white shadow-sm rounded-xl border border-gray-200 p-5">
-              <h3 className="text-base font-semibold text-gray-900 mb-4">Add New User</h3>
-              <form onSubmit={handleAddUser} className="space-y-4">
-                {userMsg && (
-                  <div className={`p-3 rounded-lg text-sm ${userMsg.type === "success" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
-                    {userMsg.msg}
-                  </div>
-                )}
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Full Name *</label>
-                  <input type="text" required className="block w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#E54B3F] focus:border-[#E54B3F]" value={newUserName} onChange={e => setNewUserName(e.target.value)} placeholder="Dr. John Doe" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Email *</label>
-                  <input type="email" required className="block w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#E54B3F] focus:border-[#E54B3F]" value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} placeholder="hod@sjcet.edu" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Password *</label>
-                  <input type="password" required className="block w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#E54B3F] focus:border-[#E54B3F]" value={newUserPassword} onChange={e => setNewUserPassword(e.target.value)} placeholder="Minimum 6 characters" minLength={6} />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Department *</label>
-                  <input type="text" required className="block w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#E54B3F] focus:border-[#E54B3F]" value={newUserDept} onChange={e => setNewUserDept(e.target.value)} placeholder="e.g. Electrical Engineering" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Role</label>
-                  <select className="block w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#E54B3F] focus:border-[#E54B3F]" value={newUserRole} onChange={e => setNewUserRole(e.target.value)}>
-                    <option value="HOD">HOD</option>
-                    <option value="COORDINATOR">COORDINATOR</option>
-                    <option value="ADMIN">ADMIN</option>
-                  </select>
-                </div>
-                <button
-                  type="submit"
-                  disabled={addingUser}
-                  className={`w-full flex justify-center items-center py-2 px-4 bg-[#E54B3F] text-white text-sm font-semibold rounded-lg hover:bg-[#d43d32] transition-colors ${addingUser ? "opacity-70 cursor-not-allowed" : ""}`}
-                >
-                  {addingUser ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      Adding...
-                    </>
-                  ) : "Add User"}
-                </button>
-              </form>
-            </div>
-          </div>
-          <div className="md:col-span-3">
-            <div className="bg-white shadow-sm overflow-hidden rounded-xl border border-gray-200">
-              <div className="px-5 py-4 border-b border-gray-100">
-                <h3 className="text-base font-semibold text-gray-900">Registered Users ({users.length})</h3>
+        <div className="space-y-6">
+
+          {/* Pending Registrations panel */}
+          {pendingRegistrations.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl overflow-hidden">
+              <div className="px-5 py-3 border-b border-amber-200 flex items-center gap-2">
+                <span className="text-amber-500">⏳</span>
+                <h3 className="text-sm font-semibold text-amber-800">Pending Registration Requests ({pendingRegistrations.length})</h3>
               </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-100">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Department</th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-100">
-                    {users.map((u) => (
-                      <tr key={u.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-5 py-3 text-sm font-medium text-gray-800">{u.name}</td>
-                        <td className="px-5 py-3 text-sm text-gray-500">{u.email}</td>
-                        <td className="px-5 py-3 text-sm text-gray-500">{u.department}</td>
-                        <td className="px-5 py-3">
-                          <span className={`px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              u.role === "ADMIN" ? "bg-orange-100 text-orange-700" :
-                              u.role === "COORDINATOR" ? "bg-purple-100 text-purple-700" :
-                              "bg-blue-100 text-blue-700"
-                            }`}>
-                            {u.role}
-                          </span>
-                        </td>
+              <ul className="divide-y divide-amber-100">
+                {pendingRegistrations.map(u => (
+                  <li key={u.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800">{u.name}</p>
+                      <p className="text-xs text-gray-500">{u.email}</p>
+                      {u.position && <p className="text-xs text-amber-700 mt-0.5">📋 {u.position}</p>}
+                      {u.phone_number && <p className="text-xs text-gray-500">📱 {u.phone_number}</p>}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => handleApproveUser(u.id)}
+                        disabled={approvingUserId === u.id || rejectingUserId === u.id}
+                        className="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {approvingUserId === u.id ? (
+                          <><svg className="animate-spin h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Approving...</>
+                        ) : "✓ Approve"}
+                      </button>
+                      <button
+                        onClick={() => handleRejectUser(u.id)}
+                        disabled={approvingUserId === u.id || rejectingUserId === u.id}
+                        className="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-lg bg-white text-red-600 border border-red-300 hover:bg-red-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {rejectingUserId === u.id ? "Rejecting..." : "✕ Reject"}
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+            <div className="md:col-span-2">
+              <div className="bg-white shadow-sm rounded-xl border border-gray-200 p-5">
+                <h3 className="text-base font-semibold text-gray-900 mb-4">Add New User</h3>
+                <form onSubmit={handleAddUser} className="space-y-4">
+                  {userMsg && (
+                    <div className={`p-3 rounded-lg text-sm ${userMsg.type === "success" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                      {userMsg.msg}
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Full Name *</label>
+                    <input type="text" required className="block w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#E54B3F] focus:border-[#E54B3F]" value={newUserName} onChange={e => setNewUserName(e.target.value)} placeholder="Dr. John Doe" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Email *</label>
+                    <input type="email" required className="block w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#E54B3F] focus:border-[#E54B3F]" value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} placeholder="hod@sjcet.edu" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Password *</label>
+                    <input type="password" required className="block w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#E54B3F] focus:border-[#E54B3F]" value={newUserPassword} onChange={e => setNewUserPassword(e.target.value)} placeholder="Minimum 6 characters" minLength={6} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Department *</label>
+                    <input type="text" required className="block w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#E54B3F] focus:border-[#E54B3F]" value={newUserDept} onChange={e => setNewUserDept(e.target.value)} placeholder="e.g. Electrical Engineering" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Role</label>
+                    <select className="block w-full border border-gray-300 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#E54B3F] focus:border-[#E54B3F]" value={newUserRole} onChange={e => setNewUserRole(e.target.value)}>
+                      <option value="HOD">HOD</option>
+                      <option value="COORDINATOR">COORDINATOR</option>
+                      <option value="CUSTODIAN">CUSTODIAN</option>
+                      <option value="ADMIN">ADMIN</option>
+                    </select>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={addingUser}
+                    className={`w-full flex justify-center items-center py-2 px-4 bg-[#E54B3F] text-white text-sm font-semibold rounded-lg hover:bg-[#d43d32] transition-colors ${addingUser ? "opacity-70 cursor-not-allowed" : ""}`}
+                  >
+                    {addingUser ? (
+                      <><svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Adding...</>
+                    ) : "Add User"}
+                  </button>
+                </form>
+              </div>
+            </div>
+            <div className="md:col-span-3">
+              <div className="bg-white shadow-sm overflow-hidden rounded-xl border border-gray-200">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h3 className="text-base font-semibold text-gray-900">Active Users ({activeUsers.length})</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-100">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Department</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-100">
+                      {activeUsers.map((u) => (
+                        <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-5 py-3 text-sm font-medium text-gray-800">
+                            <div>{u.name}</div>
+                            {u.position && <div className="text-xs text-gray-400">{u.position}</div>}
+                          </td>
+                          <td className="px-5 py-3 text-sm text-gray-500">{u.email}</td>
+                          <td className="px-5 py-3 text-sm text-gray-500">{u.department}</td>
+                          <td className="px-5 py-3">
+                            <span className={`px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                u.role === "ADMIN" ? "bg-orange-100 text-orange-700" :
+                                u.role === "COORDINATOR" ? "bg-purple-100 text-purple-700" :
+                                u.role === "CUSTODIAN" ? "bg-indigo-100 text-indigo-700" :
+                                "bg-blue-100 text-blue-700"
+                              }`}>
+                              {u.role}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>

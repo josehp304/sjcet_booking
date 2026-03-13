@@ -13,15 +13,28 @@ export async function GET(request: Request) {
     const facilityId = searchParams.get('facilityId');
     const date = searchParams.get('date');
     const month = searchParams.get('month'); // Expects YYYY-MM
+    // custodian query: only bookings for facilities I'm custodian of
+    const forCustodian = searchParams.get('forCustodian') === 'true';
 
     let query = `
-      SELECT b.*, f.name as facility_name, u.name as user_name, u.department
+      SELECT b.*, f.name as facility_name, u.name as user_name, u.department,
+             f.custodian_id,
+             cu.name as custodian_name
       FROM bookings b
       JOIN facilities f ON b.facility_id = f.id
       JOIN users u ON b.user_id = u.id
-      WHERE b.status IN ('CONFIRMED', 'APPROVAL_PENDING')
+      LEFT JOIN users cu ON f.custodian_id = cu.id
+      WHERE b.status IN ('CONFIRMED', 'APPROVAL_PENDING', 'DENIED')
     `;
     const values: any[] = [];
+
+    // If this is a custodian and they only want their pending approvals
+    if (forCustodian && (session.user.role === 'CUSTODIAN' || session.user.role === 'HOD' || session.user.role === 'ADMIN')) {
+      if (session.user.role !== 'ADMIN') {
+        values.push(session.user.id);
+        query += ` AND f.custodian_id = $${values.length}`;
+      }
+    }
 
     if (facilityId) {
       values.push(facilityId);
@@ -34,7 +47,7 @@ export async function GET(request: Request) {
     } else if (month) {
       const startOfMonth = `${month}-01`;
       const [year, mon] = month.split('-').map(Number);
-      const lastDay = new Date(year, mon, 0).getDate(); // day 0 of next month = last day of current month
+      const lastDay = new Date(year, mon, 0).getDate();
       const endOfMonth = `${month}-${String(lastDay).padStart(2, '0')}`;
       values.push(startOfMonth, endOfMonth);
       query += ` AND b.booking_date >= $${values.length - 1} AND b.booking_date <= $${values.length}`;
@@ -57,7 +70,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { facilityId, date, session: bookingSession, purpose } = await request.json();
+    const { facilityId, date, session: bookingSession, purpose, phoneNumber } = await request.json();
 
     if (!purpose || purpose.trim() === '') {
       return NextResponse.json({ error: 'Purpose is required' }, { status: 400 });
@@ -66,7 +79,6 @@ export async function POST(request: Request) {
     const [reqStart, reqEnd] = bookingSession.split('-');
 
     // Check for conflicts (block both confirmed and pending-approval slots)
-    // We check if existing start < new end AND existing end > new start
     const conflictCheck = await pool.query(
       `SELECT id FROM bookings 
        WHERE facility_id = $1 
@@ -81,12 +93,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Slot already booked or overlaps with an existing booking' }, { status: 409 });
     }
 
-    // HOD and COORDINATOR bookings require admin approval; ADMIN bookings are confirmed immediately
-    const bookingStatus = ['HOD', 'COORDINATOR'].includes(session.user.role) ? 'APPROVAL_PENDING' : 'CONFIRMED';
+    // Look up the facility's custodian
+    const facilityRes = await pool.query('SELECT custodian_id FROM facilities WHERE id = $1', [facilityId]);
+    const hasCustodian = facilityRes.rows.length > 0 && facilityRes.rows[0].custodian_id != null;
+
+    // ADMIN bookings are confirmed immediately.
+    // If facility has a custodian, all non-admin bookings go to APPROVAL_PENDING for custodian to approve.
+    // If no custodian, HOD/COORDINATOR still go to APPROVAL_PENDING (admin approves as before).
+    const bookingStatus = session.user.role === 'ADMIN' ? 'CONFIRMED' : 'APPROVAL_PENDING';
 
     const result = await pool.query(
-      'INSERT INTO bookings (facility_id, user_id, booking_date, session, purpose, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-      [facilityId, session.user.id, date, bookingSession, purpose, bookingStatus]
+      'INSERT INTO bookings (facility_id, user_id, booking_date, session, purpose, status, phone_number) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [facilityId, session.user.id, date, bookingSession, purpose, bookingStatus, phoneNumber || null]
     );
 
     return NextResponse.json(result.rows[0], { status: 201 });

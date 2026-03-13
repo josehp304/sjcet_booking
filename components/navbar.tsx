@@ -17,6 +17,7 @@ export function Navbar() {
     { href: "/book", label: "Book Facility" },
     { href: "/availability", label: "Availability" },
     ...(user.role === "ADMIN" ? [{ href: "/admin", label: "Admin Panel" }] : []),
+    ...(user.role === "CUSTODIAN" || user.role === "HOD" ? [{ href: "/custodian", label: "My Approvals" }] : []),
   ];
 
   return (

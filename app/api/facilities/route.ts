@@ -9,7 +9,12 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const result = await pool.query('SELECT * FROM facilities ORDER BY name ASC');
+    const result = await pool.query(`
+      SELECT f.*, u.name as custodian_name, u.department as custodian_department
+      FROM facilities f
+      LEFT JOIN users u ON f.custodian_id = u.id
+      ORDER BY f.name ASC
+    `);
     return NextResponse.json(result.rows);
   } catch (error) {
     console.error('Error fetching facilities:', error);
@@ -24,11 +29,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { name, capacity, description, features } = await request.json();
+    const { name, capacity, description, features, custodian_id } = await request.json();
 
     const result = await pool.query(
-      'INSERT INTO facilities (name, capacity, description, features) VALUES ($1, $2, $3, $4) RETURNING *',
-      [name, capacity, description, features ?? []]
+      'INSERT INTO facilities (name, capacity, description, features, custodian_id) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [name, capacity, description, features ?? [], custodian_id ?? null]
     );
 
     return NextResponse.json(result.rows[0], { status: 201 });

@@ -7,7 +7,7 @@ type User = {
   id: number;
   name: string;
   email: string;
-  role: "ADMIN" | "HOD" | "COORDINATOR";
+  role: "ADMIN" | "HOD" | "COORDINATOR" | "CUSTODIAN";
   department: string;
 };
 
