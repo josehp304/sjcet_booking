@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { format } from "date-fns";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -23,7 +23,7 @@ type Booking = {
   status: string;
 };
 
-export default function BookPage() {
+function BookForm() {
   const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -481,3 +481,16 @@ export default function BookPage() {
     </div>
   );
 }
+
+export default function BookPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#E54B3F]"></div>
+      </div>
+    }>
+      <BookForm />
+    </Suspense>
+  );
+}
+
