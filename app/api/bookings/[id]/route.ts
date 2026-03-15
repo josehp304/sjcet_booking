@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { sendEmail } from '@/lib/email';
 
 // PATCH: Approve (status -> CONFIRMED) or Deny (status -> DENIED)
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -16,8 +17,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     // Look up the booking to check facility custodian
     const bookingRes = await pool.query(
-      `SELECT b.*, f.custodian_id FROM bookings b
+      `SELECT b.*, f.custodian_id, f.name as facility_name, u.email as user_email, u.name as user_name FROM bookings b
        JOIN facilities f ON b.facility_id = f.id
+       JOIN users u ON b.user_id = u.id
        WHERE b.id = $1`,
       [id]
     );
@@ -50,6 +52,28 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       [newStatus, id]
     );
 
+    // Send email notification to user
+    try {
+      if (booking.user_email) {
+        const formattedDate = new Date(booking.booking_date).toISOString().split('T')[0];
+        if (newStatus === 'CONFIRMED') {
+          await sendEmail({
+            to: booking.user_email,
+            subject: `Booking Confirmed: ${booking.facility_name}`,
+            text: `Hello ${booking.user_name},\n\nYour booking request for ${booking.facility_name} on ${formattedDate} (${booking.session}) has been APPROVED.\n\nThank you,\nSJCET Booking System`,
+          });
+        } else if (newStatus === 'DENIED') {
+          await sendEmail({
+            to: booking.user_email,
+            subject: `Booking Denied: ${booking.facility_name}`,
+            text: `Hello ${booking.user_name},\n\nUnfortunately, your booking request for ${booking.facility_name} on ${formattedDate} (${booking.session}) has been DENIED.\n\nPlease contact the facility custodian or administrator for more details.\n\nThank you,\nSJCET Booking System`,
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error sending email notification:', err);
+    }
+
     return NextResponse.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating booking:', error);
@@ -68,8 +92,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
     // Look up booking + facility custodian
     const bookingRes = await pool.query(
-      `SELECT b.*, f.custodian_id FROM bookings b
+      `SELECT b.*, f.custodian_id, f.name as facility_name, u.email as user_email, u.name as user_name FROM bookings b
        JOIN facilities f ON b.facility_id = f.id
+       JOIN users u ON b.user_id = u.id
        WHERE b.id = $1`,
       [id]
     );
@@ -97,6 +122,20 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
     if (result.rows.length === 0) {
       return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+    }
+
+    // Send email notification to user if cancelled by someone else
+    try {
+      if (booking.user_email && !isOwner) { // if cancelled by admin/custodian
+        const formattedDate = new Date(booking.booking_date).toISOString().split('T')[0];
+        await sendEmail({
+          to: booking.user_email,
+          subject: `Booking Cancelled: ${booking.facility_name}`,
+          text: `Hello ${booking.user_name},\n\nYour booking for ${booking.facility_name} on ${formattedDate} (${booking.session}) has been CANCELLED by an administrator or custodian.\n\nThank you,\nSJCET Booking System`,
+        });
+      }
+    } catch (err) {
+      console.error('Error sending email notification:', err);
     }
 
     return NextResponse.json({ success: true });

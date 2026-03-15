@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { sendEmail } from '@/lib/email';
 
 export async function PATCH(
   _request: Request,
@@ -25,7 +26,22 @@ export async function PATCH(
       return NextResponse.json({ error: 'User not found or already processed.' }, { status: 404 });
     }
 
-    return NextResponse.json(result.rows[0]);
+    const user = result.rows[0];
+
+    // Send email notification to user
+    try {
+      if (user.email) {
+        await sendEmail({
+          to: user.email,
+          subject: 'Account Registration Rejected - SJCET Booking System',
+          text: `Hello ${user.name},\n\nUnfortunately, your registration request for the SJCET Booking System has been rejected by an administrator.\n\nPlease contact the administrator for more information.\n\nThank you,\nSJCET Booking System`,
+        });
+      }
+    } catch (err) {
+      console.error('Error sending email notification:', err);
+    }
+
+    return NextResponse.json(user);
   } catch (error) {
     console.error('Reject user error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

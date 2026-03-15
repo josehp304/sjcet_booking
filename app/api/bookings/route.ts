@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { sendEmail } from '@/lib/email';
 
 export async function GET(request: Request) {
   try {
@@ -94,7 +95,8 @@ export async function POST(request: Request) {
     }
 
     // Look up the facility's custodian
-    const facilityRes = await pool.query('SELECT custodian_id FROM facilities WHERE id = $1', [facilityId]);
+    const facilityRes = await pool.query('SELECT name, custodian_id FROM facilities WHERE id = $1', [facilityId]);
+    const facility = facilityRes.rows[0];
     const hasCustodian = facilityRes.rows.length > 0 && facilityRes.rows[0].custodian_id != null;
 
     // ADMIN bookings are confirmed immediately.
@@ -106,6 +108,37 @@ export async function POST(request: Request) {
       'INSERT INTO bookings (facility_id, user_id, booking_date, session, purpose, status, phone_number) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
       [facilityId, session.user.id, date, bookingSession, purpose, bookingStatus, phoneNumber || null]
     );
+
+    // Send email notification
+    if (bookingStatus === 'APPROVAL_PENDING') {
+      try {
+        let approverEmail = null;
+        if (hasCustodian) {
+          const custodianRes = await pool.query('SELECT email FROM users WHERE id = $1', [facility.custodian_id]);
+          if (custodianRes.rows.length > 0) {
+            approverEmail = custodianRes.rows[0].email;
+          }
+        } else {
+          // send to admin
+          const adminRes = await pool.query("SELECT email FROM users WHERE role = 'ADMIN' LIMIT 1");
+          if (adminRes.rows.length > 0) {
+            approverEmail = adminRes.rows[0].email;
+          }
+        }
+
+        if (approverEmail) {
+          await sendEmail({
+            to: approverEmail,
+            subject: `New Booking Request for ${facility.name}`,
+            text: `A new booking request has been made by ${session.user.name} for ${facility.name} on ${date} (${bookingSession}). \nPurpose: ${purpose}\n\nPlease log in to the SJCET Booking System to approve or deny the request.`,
+          });
+        }
+      } catch (err) {
+        console.error('Error sending email notification:', err);
+      }
+    } else if (bookingStatus === 'CONFIRMED') {
+      // It's the admin booking, no need to ask for approval, maybe notify user?
+    }
 
     return NextResponse.json(result.rows[0], { status: 201 });
   } catch (error) {
